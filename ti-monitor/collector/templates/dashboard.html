@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>TI Monitor — Dashboard Servidores</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #22252a;
+      color: #e3e8ef;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    header {
+      background-color: #1c1e22;
+      color: #AFC6FF;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border-bottom: 1px solid #30353c;
+    }
+
+    #kpiSummary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .kpi-card {
+      background: #2a2d32;
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+      transition: transform 0.3s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-4px);
+    }
+
+    .kpi-card h3 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #7db4ff;
+      margin-bottom: 0.4rem;
+    }
+
+    .kpi-card p {
+      font-size: 0.9rem;
+      color: #a5b3c8;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto 3rem;
+      padding: 0 1rem;
+    }
+
+    section.grid-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .card {
+      background: #2a2d32;
+      border-radius: 14px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      transition: box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      box-shadow: 0 6px 25px rgba(0,0,0,0.6);
+    }
+
+    .alert-border {
+      border: 2px solid #e74c3c !important;
+      animation: blink 1s infinite alternate;
+    }
+
+    @keyframes blink {
+      from { box-shadow: 0 0 5px #e74c3c; }
+      to { box-shadow: 0 0 15px #e74c3c; }
+    }
+
+    h2.section-title {
+      text-align: center;
+      color: #AFC6FF;
+      font-size: 1.75rem;
+      margin-bottom: 2rem;
+    }
+
+    #serverCards {
+      overflow-x: auto;
+      display: flex;
+      gap: 1rem;
+      padding-bottom: 1rem;
+      scrollbar-width: none;
+    }
+
+    #serverCards::-webkit-scrollbar {
+      display: none;
+    }
+
+    #serverCards > div {
+      min-width: 300px;
+      flex-shrink: 0;
+    }
+
+    .progress-bg {
+      background-color: #383c42;
+      border-radius: 6px;
+      height: 16px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 6px;
+      background-image: linear-gradient(to right, #00c9ff, #92fe9d);
+      transition: width 0.4s ease-in-out;
+    }
+
+    .text-xs {
+      font-size: 0.75rem;
+      color: #aab4c3;
+    }
+  </style>
+</head>
+<body>
+
+<header>TI Monitor — Dashboard de Servidores</header>
+
+<!-- KPIs -->
+<div id="kpiSummary"></div>
+
+<main>
+  <section class="grid-cards">
+    <div class="card">
+      <h3 class="text-xl font-semibold mb-4">🔥 CPU (%)</h3>
+      <canvas id="cpuChart"></canvas>
+    </div>
+    <div class="card">
+      <h3 class="text-xl font-semibold mb-4">🧠 Memória (%)</h3>
+      <canvas id="memChart"></canvas>
+    </div>
+    <div class="card">
+      <h3 class="text-xl font-semibold mb-4">💾 Disco (%)</h3>
+      <canvas id="diskChart"></canvas>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Resumo por Servidor</h2>
+    <div id="serverCards"></div>
+  </section>
+</main>
+
+<script>
+const TOKEN = "{{ token }}";
+const API = "/api/v1/metrics?limit=200";
+
+function getColor(value) {
+  if (value < 70) return '#2ecc71';
+  if (value < 90) return '#f1c40f';
+  return '#e74c3c';
+}
+
+function notify(title, message) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    new Notification(title, { body: message, icon: "/favicon.ico" });
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then(permission => {
+      if (permission === "granted") {
+        new Notification(title, { body: message, icon: "/favicon.ico" });
+      }
+    });
+  }
+}
+
+async function fetchData() {
+  try {
+    const res = await fetch(API, { headers: { token: TOKEN } });
+    if (!res.ok) throw new Error("Erro ao buscar dados");
+    return await res.json();
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+function buildCharts(labels, cpuData, memData, diskData) {
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e3e8ef' } }
+    },
+    scales: {
+      x: { ticks: { color: '#e3e8ef' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      y: { ticks: { color: '#e3e8ef' }, beginAtZero: true, max: 100 }
+    }
+  };
+
+  ['cpuChart', 'memChart', 'diskChart'].forEach(id => {
+    if (window[id + 'Instance']) window[id + 'Instance'].destroy();
+  });
+
+  window.cpuChartInstance = new Chart(document.getElementById('cpuChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'CPU %', data: cpuData, backgroundColor: cpuData.map(getColor) }] },
+    options
+  });
+
+  window.memChartInstance = new Chart(document.getElementById('memChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Memória %', data: memData, backgroundColor: memData.map(getColor) }] },
+    options
+  });
+
+  window.diskChartInstance = new Chart(document.getElementById('diskChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Disco %', data: diskData, backgroundColor: diskData.map(getColor) }] },
+    options
+  });
+}
+
+function buildDiskUnits(units) {
+  if (!units?.length) return '<p class="text-xs">Sem dados.</p>';
+  return units.map(u => {
+    const pct = Math.round((u.used_gb / u.total_gb) * 100);
+    return `
+      <div class="mb-3">
+        <div class="flex justify-between text-sm">
+          <span>${u.name}</span>
+          <span>${u.used_gb} / ${u.total_gb} GB (${pct}%)</span>
+        </div>
+        <div class="progress-bg">
+          <div class="progress-fill" style="width:${pct}%; background-color:${getColor(pct)}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function buildServerCards(latest) {
+  const container = document.getElementById('serverCards');
+  container.innerHTML = '';
+
+  Object.keys(latest).sort().forEach(host => {
+    const s = latest[host];
+    let diskUnits = [];
+    try { diskUnits = s.disk_units ? JSON.parse(s.disk_units) : []; } catch { }
+
+    const alertActive = s.cpu_percent >= 90 || s.memory_percent >= 90 || s.disk_percent >= 90 || diskUnits.some(u => (u.used_gb / u.total_gb) * 100 >= 90);
+    const cardClass = alertActive ? "card alert-border" : "card";
+
+    const card = document.createElement('div');
+    card.className = cardClass;
+    card.innerHTML = `
+      <h4 class="text-lg font-semibold mb-3">${host}</h4>
+      <div class="mb-3">
+        <div class="flex justify-between text-sm">CPU: <span class="font-bold" style="color:${getColor(s.cpu_percent)}">${s.cpu_percent}%</span></div>
+        <div class="progress-bg"><div class="progress-fill" style="width:${s.cpu_percent}%; background-color:${getColor(s.cpu_percent)};"></div></div>
+      </div>
+      <div class="mb-3">
+        <div class="flex justify-between text-sm">Memória: <span class="font-bold" style="color:${getColor(s.memory_percent)}">${s.memory_percent}%</span></div>
+        <div class="progress-bg"><div class="progress-fill" style="width:${s.memory_percent}%; background-color:${getColor(s.memory_percent)};"></div></div>
+        <p class="text-xs mt-1">(${s.memory_used_gb} / ${s.memory_total_gb} GB)</p>
+      </div>
+      <div class="mb-3">
+        <div class="flex justify-between text-sm">Disco: <span class="font-bold" style="color:${getColor(s.disk_percent)}">${s.disk_percent}%</span></div>
+        <div class="progress-bg"><div class="progress-fill" style="width:${s.disk_percent}%; background-color:${getColor(s.disk_percent)};"></div></div>
+        <p class="text-xs mt-1">(${s.disk_used_gb} / ${s.disk_total_gb} GB)</p>
+      </div>
+      <div class="mt-4">
+        <h5 class="font-semibold mb-2">Unidades de Disco</h5>
+        ${buildDiskUnits(diskUnits)}
+      </div>
+    `;
+
+    container.appendChild(card);
+
+    if (alertActive) {
+      notify(`Alerta no servidor ${host}`, 'Uso crítico detectado!');
+    }
+  });
+}
+
+function buildSummary(data) {
+  const container = document.getElementById('kpiSummary');
+  if (!data.length) {
+    container.innerHTML = `<p style="text-align:center; color:#888;">Sem dados para exibir.</p>`;
+    return;
+  }
+
+  const latest = {};
+  data.forEach(item => {
+    if (!latest[item.host] || item.timestamp > latest[item.host].timestamp) latest[item.host] = item;
+  });
+
+  const all = Object.values(latest);
+  const total = all.length;
+  const crit = all.filter(s => s.cpu_percent >= 90 || s.memory_percent >= 90 || s.disk_percent >= 90).length;
+  const warn = all.filter(s =>
+    (s.cpu_percent >= 70 && s.cpu_percent < 90) ||
+    (s.memory_percent >= 70 && s.memory_percent < 90) ||
+    (s.disk_percent >= 70 && s.disk_percent < 90)
+  ).length;
+
+  const cpuAvg = Math.round(all.reduce((a, b) => a + b.cpu_percent, 0) / total);
+  const memAvg = Math.round(all.reduce((a, b) => a + b.memory_percent, 0) / total);
+  const diskAvg = Math.round(all.reduce((a, b) => a + b.disk_percent, 0) / total);
+
+  container.innerHTML = `
+    <div class="kpi-card"><h3>${total}</h3><p>Servidores Monitorados</p></div>
+    <div class="kpi-card"><h3>${crit}</h3><p>Críticos ❌</p></div>
+    <div class="kpi-card"><h3>${warn}</h3><p>Alertas ⚠️</p></div>
+    <div class="kpi-card"><h3>${cpuAvg}%</h3><p>Média CPU</p></div>
+    <div class="kpi-card"><h3>${memAvg}%</h3><p>Média Memória</p></div>
+    <div class="kpi-card"><h3>${diskAvg}%</h3><p>Média Disco</p></div>
+  `;
+}
+
+async function render() {
+  const data = await fetchData();
+  if (!data.length) return;
+
+  const latest = {};
+  data.forEach(item => {
+    if (!latest[item.host] || item.timestamp > latest[item.host].timestamp) latest[item.host] = item;
+  });
+
+  const hosts = Object.keys(latest).sort();
+  const cpu = hosts.map(h => latest[h].cpu_percent);
+  const mem = hosts.map(h => latest[h].memory_percent);
+  const disk = hosts.map(h => latest[h].disk_percent);
+
+  buildCharts(hosts, cpu, mem, disk);
+  buildServerCards(latest);
+  buildSummary(data);
+}
+
+render();
+setInterval(render, 30000);
+</script>
+
+</body>
+</html>
