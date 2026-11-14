@@ -1,0 +1,8 @@
+{
+ "fonte": "CC0 Music Captioned (Hugging Face: mrfakename/cc0-music-captioned)",
+ "titulo": "A slow-paced, ambient piece in B minor with a tempo of 75 BPM featuring a haunting violin melody and sparse chords.",
+ "licenca": "CC0 (declarada pela coletânea; parte vem do FreePD, domínio público)",
+ "url": "https://huggingface.co/datasets/mrfakename/cc0-music-captioned",
+ "origem": "data/train-00000-of-00591.parquet linha 10 (1563.wav)",
+ "credito_obrigatorio": false
+}

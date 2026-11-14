@@ -84,7 +84,8 @@ def audio(plano: dict, pasta: Path, clima: str = "reflexivo", com_trilha: bool =
     trilha = sons.trilha(clima, plano["duracao"], pasta, trilha_fixa) if com_trilha else None
     if trilha:
         usados.add(str(trilha))
-    creditos = [c for c in (sons.credito_de(Path(u)) for u in sorted(usados)) if c]
+    # créditos que a licença exige (CC0 marcado com "credito_obrigatorio": false não entra na descrição)
+    creditos = [c for c in (sons.credito_de(Path(u)) for u in sorted(usados)) if c and c.get("credito_obrigatorio", True)]
     (pasta / "creditos.json").write_text(json.dumps(creditos, ensure_ascii=False, indent=1))
     saida = pasta / "audio_final.wav"
     mix = pasta / "audio_mix.wav"
