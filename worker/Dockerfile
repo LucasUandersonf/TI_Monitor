@@ -58,5 +58,5 @@ ENV FABRICA_DADOS=/dados FABRICA_PROMPTS=/app/prompts FABRICA_MODELOS=/app/model
     FABRICA_RENDERER=/app/renderer/render_artifact.mjs PIPER_MODEL=/app/modelos/piper/pt_BR-faber-medium.onnx
 WORKDIR /app/worker
 EXPOSE 8000
-# Railway (e outros) passam a porta em $PORT
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Railway (e outros) passam a porta em $PORT; "::" escuta em IPv4 e IPv6 (a rede interna do Railway usa IPv6)
+CMD ["sh", "-c", "uvicorn app.main:app --host :: --port ${PORT:-8000}"]
