@@ -208,8 +208,7 @@
       "parameters": {
         "resource": "fileFolder",
         "searchMethod": "query",
-        "queryString": "name contains '.htm' and trashed = false",
-        "returnAll": true,
+        "queryString": "trashed = false",
         "filter": {
           "folderId": {
             "__rl": true,

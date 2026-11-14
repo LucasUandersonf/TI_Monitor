@@ -195,7 +195,7 @@ n = [
     node("Ler planilha", "n8n-nodes-base.extractFromFile", 1, [880, 0], {"operation": "xlsx", "binaryPropertyName": "data", "options": {"headerRow": True}}),
     code("Linhas de hoje", [1100, 0], LINHAS_DE_HOJE),
     node("Arquivos da pasta", "n8n-nodes-base.googleDrive", 3, [1320, 0], {"resource": "fileFolder", "searchMethod": "query",
-        "queryString": "name contains '.htm' and trashed = false", "returnAll": True,
+        "queryString": "trashed = false",  # o Drive só busca pelo começo das palavras; o filtro de .html fica no nó seguinte "returnAll": True,
         "filter": {"folderId": rl(f"={{{{ {CFG}.drive_pasta_artifacts }}}}"), "whatToSearch": "files"},
         "options": {"fields": ["id", "name"]}}, executeOnce=True, alwaysOutputData=True),
     code("Casar roteiro com artifact", [1540, 0], CASAR),
