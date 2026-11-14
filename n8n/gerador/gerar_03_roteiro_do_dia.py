@@ -113,8 +113,13 @@ return saida;"""
 
 MONTAR = r"""const cfg = $('Config').first().json;
 const linhas = $('Casar roteiro com artifact').all().map(i => i.json);
+const itens = $input.all();
+if (itens.length !== linhas.length || !itens.every(i => i.binary && i.binary.data)) {
+  throw new Error(`O nó "Baixar artifact" não baixou o arquivo (chegaram ${itens.length} itens sem arquivo para ${linhas.length} roteiro(s)). ` +
+    `Abra o nó "Baixar artifact" e deixe: Resource = File, Operation = Download, File = By ID {{ $json.id }}.`);
+}
 const saida = [];
-for (let i = 0; i < $input.all().length; i++) {
+for (let i = 0; i < itens.length; i++) {
   const buf = await this.helpers.getBinaryDataBuffer(i, 'data');
   const l = linhas[i];
   saida.push({ json: {
@@ -202,7 +207,7 @@ n = [
     # o worker dorme quando parado (Railway): a primeira chamada o acorda, por isso o tempo longo e as novas tentativas
     http("Worker está no ar?", [440, 0], "GET", f"={{{{ {CFG}.worker_url }}}}/saude", None, 120000,
          retryOnFail=True, maxTries=4, waitBetweenTries=5000),
-    node("Baixar planilha", "n8n-nodes-base.googleDrive", 3, [660, 0], {"operation": "download", "fileId": rl(f"={{{{ {CFG}.planilha_id }}}}"),
+    node("Baixar planilha", "n8n-nodes-base.googleDrive", 3, [660, 0], {"resource": "file", "operation": "download", "fileId": rl(f"={{{{ {CFG}.planilha_id }}}}"),
         "options": {"googleFileConversion": {"conversion": {"sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}}}},
         notes="Funciona com Excel (.xlsx) salvo no Drive ou com Planilha Google.", notesInFlow=True),
     node("Ler planilha", "n8n-nodes-base.extractFromFile", 1, [880, 0], {"operation": "xlsx", "binaryPropertyName": "data", "options": {"headerRow": True}}),
@@ -213,7 +218,9 @@ n = [
         "filter": {"folderId": rl(f"={{{{ {CFG}.drive_pasta_artifacts }}}}"), "whatToSearch": "files"},
         "options": {"fields": ["id", "name"]}}, executeOnce=True, alwaysOutputData=True),
     code("Casar roteiro com artifact", [1540, 0], CASAR),
-    node("Baixar artifact", "n8n-nodes-base.googleDrive", 3, [1760, 0], {"operation": "download", "fileId": rl("={{ $json.id }}"), "options": {}}),
+    node("Baixar artifact", "n8n-nodes-base.googleDrive", 3, [1760, 0], {"resource": "file", "operation": "download",
+        "fileId": rl("={{ $json.id }}"), "options": {}},
+        notes="Resource: File · Operation: Download · File by ID = {{ $json.id }}", notesInFlow=True),
     code("Montar pedido", [1980, 0], MONTAR),
     http("Enviar para edição", [2200, 0], "POST", f"={{{{ {CFG}.worker_url }}}}/edicao", "={{ JSON.stringify($json) }}", 120000),
     code("Guardar jobs", [2420, 0], GUARDAR),

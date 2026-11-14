@@ -145,6 +145,7 @@
         0
       ],
       "parameters": {
+        "resource": "file",
         "operation": "download",
         "fileId": {
           "__rl": true,
@@ -249,6 +250,7 @@
         0
       ],
       "parameters": {
+        "resource": "file",
         "operation": "download",
         "fileId": {
           "__rl": true,
@@ -256,7 +258,9 @@
           "value": "={{ $json.id }}"
         },
         "options": {}
-      }
+      },
+      "notes": "Resource: File · Operation: Download · File by ID = {{ $json.id }}",
+      "notesInFlow": true
     },
     {
       "id": "bf0503a9-b47c-5a11-aba0-878a86020daa",
@@ -269,7 +273,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const cfg = $('Config').first().json;\nconst linhas = $('Casar roteiro com artifact').all().map(i => i.json);\nconst saida = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const l = linhas[i];\n  saida.push({ json: {\n    nome: l.nome_video,\n    data: l.data,\n    roteiro: l.roteiro,\n    artifact_base64: buf.toString('base64'),\n    opcoes: {\n      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: false,   // sem música de fundo: só voz e efeitos\n      narracao_vem_de: cfg.narracao_vem_de || 'auto',\n      voz: cfg.voz || null,\n      direcao: l.direcao || null\n    }\n  } });\n}\nreturn saida;"
+        "jsCode": "const cfg = $('Config').first().json;\nconst linhas = $('Casar roteiro com artifact').all().map(i => i.json);\nconst itens = $input.all();\nif (itens.length !== linhas.length || !itens.every(i => i.binary && i.binary.data)) {\n  throw new Error(`O nó \"Baixar artifact\" não baixou o arquivo (chegaram ${itens.length} itens sem arquivo para ${linhas.length} roteiro(s)). ` +\n    `Abra o nó \"Baixar artifact\" e deixe: Resource = File, Operation = Download, File = By ID {{ $json.id }}.`);\n}\nconst saida = [];\nfor (let i = 0; i < itens.length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const l = linhas[i];\n  saida.push({ json: {\n    nome: l.nome_video,\n    data: l.data,\n    roteiro: l.roteiro,\n    artifact_base64: buf.toString('base64'),\n    opcoes: {\n      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: false,   // sem música de fundo: só voz e efeitos\n      narracao_vem_de: cfg.narracao_vem_de || 'auto',\n      voz: cfg.voz || null,\n      direcao: l.direcao || null\n    }\n  } });\n}\nreturn saida;"
       }
     },
     {
