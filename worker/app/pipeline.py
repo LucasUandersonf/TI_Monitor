@@ -108,7 +108,11 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
         # ---------------- shorts 9:16
         if op["shorts"]:
             jobs.etapa(job_id, "shorts", "rodando")
-            escolhidos = shorts.escolher(meta, cenas, [f["duracao"] for f in falas])[: op["max_shorts"]]
+            try:
+                escolhidos = shorts.escolher(meta, cenas, [f["duracao"] for f in falas])[: op["max_shorts"]]
+            except Exception as e:  # sem ANTHROPIC_API_KEY (e sem META.shorts no artifact): entrega o longo sem shorts
+                avisos.append(f"shorts não gerados: {str(e)[:120]}")
+                escolhidos = []
             for k, s in enumerate(escolhidos, 1):
                 ps = p / f"short_{k}"
                 (ps / "audio").mkdir(parents=True, exist_ok=True)
