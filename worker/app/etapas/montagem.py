@@ -59,8 +59,8 @@ def audio(plano: dict, pasta: Path, clima: str = "reflexivo", com_trilha: bool =
         i = int((c["inicio"] + c["fala"]["em"]) * SR)
         narr[i:i + len(f)] += f[: max(0, total - i)]
         sfx = list(c["sfx"])
-        if c["transicao"]:  # som da transição centrado no corte
-            sfx.append({"tipo": "transicao" if c["transicao"] != "fade" else "whoosh", "em": c["dur"] - c["cauda"] / 2 - 0.15})
+        if c["transicao"] and c["cauda"] >= 0.1:  # som da transição centrado no corte (corte seco: sem som)
+            sfx.append({"tipo": "transicao" if c["transicao"] != "fade" else "whoosh", "em": c["dur"] - c.get("corte", 0) + c["cauda"] / 2 - 0.15})
         for s in sfx:
             arq, ganho = sons.arquivo(s["tipo"], f"{c['indice']}-{s['tipo']}-{s['em']}")
             usados.add(str(arq))
@@ -126,7 +126,7 @@ def _xfade(clips: list[Path], cenas: list[dict], base: float, saida: Path, prese
     for k in range(1, len(clips)):
         ant = cenas[k - 1]
         nome, d = ant["transicao"] or "fade", ant["cauda"] or 0.04
-        off = round(cenas[k]["inicio"] - base, 3)
+        off = round(cenas[k].get("v_inicio", cenas[k]["inicio"]) - base, 3)
         out = f"[v{k}]"
         if TRANSICAO_MOTOR == "gltransition":
             glsl = GL_TRANSITIONS_DIR / f"{GL.get(nome, nome)}.glsl"
@@ -144,16 +144,16 @@ def juntar(clips: list[Path], plano: dict, saida: Path, grupo: int = 8, nivel: i
     então a transição entre blocos é feita do mesmo jeito que entre cenas."""
     cenas = plano["cenas"]
     if len(clips) <= grupo:
-        _xfade(clips, cenas, cenas[0]["inicio"], saida)
+        _xfade(clips, cenas, cenas[0].get("v_inicio", cenas[0]["inicio"]), saida)
         return saida
     blocos, info = [], []
     for g in range(0, len(clips), grupo):
         sub_c, sub_cl = cenas[g: g + grupo], clips[g: g + grupo]
         arq = saida.with_name(f"{saida.stem}_n{nivel}_bloco{g // grupo:02d}.mp4")
-        _xfade(sub_cl, sub_c, sub_c[0]["inicio"], arq)
+        _xfade(sub_cl, sub_c, sub_c[0].get("v_inicio", sub_c[0]["inicio"]), arq)
         blocos.append(arq)
         ult = sub_c[-1]
-        info.append({"inicio": sub_c[0]["inicio"], "transicao": ult["transicao"], "cauda": ult["cauda"]})
+        info.append({"inicio": sub_c[0].get("v_inicio", sub_c[0]["inicio"]), "transicao": ult["transicao"], "cauda": ult["cauda"]})
     juntar(blocos, {"cenas": info}, saida, grupo, nivel + 1)
     for b in blocos:
         b.unlink(missing_ok=True)

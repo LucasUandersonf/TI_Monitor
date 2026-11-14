@@ -46,7 +46,7 @@ CAMPOS = [
     ("telegram_chat_id", ""),
 ]
 
-LINHAS_DE_HOJE = r"""// Lê a planilha: colunas "roteiro" e "data" (e, se quiser, "artifact" com o nome do arquivo).
+LINHAS_DE_HOJE = r"""// Lê a planilha: colunas "roteiro" e "data" (e, se quiser, "artifact" com o nome do arquivo e "direcao" com o JSON do diretor).
 // A data pode vir como data do Excel, "20/11/2026", "2026-11-20" ou "20-11-2026".
 const cfg = $('Config').first().json;
 const hoje = (cfg.testar_com_a_data || '').trim() || $now.setZone('America/Sao_Paulo').toISODate();
@@ -75,7 +75,8 @@ $input.all().forEach((item, k) => {
   const roteiro = String(linha.roteiro ?? '').trim();
   const data = paraISO(linha.data);
   if (!roteiro || data !== hoje) return;
-  saida.push({ json: { linha: k + 2, data, roteiro, artifact: String(linha.artifact ?? linha.arquivo ?? '').trim() } });
+  saida.push({ json: { linha: k + 2, data, roteiro, artifact: String(linha.artifact ?? linha.arquivo ?? '').trim(),
+    direcao: String(linha.direcao ?? linha.diretor ?? '').trim() } });
 });
 // nenhuma linha com a data de hoje: o fluxo para aqui, sem erro
 return saida;"""
@@ -125,7 +126,8 @@ for (let i = 0; i < $input.all().length; i++) {
     opcoes: {
       shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,
       clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null,
-      narracao_vem_de: cfg.narracao_vem_de || 'auto'
+      narracao_vem_de: cfg.narracao_vem_de || 'auto',
+      direcao: l.direcao || null
     }
   } });
 }

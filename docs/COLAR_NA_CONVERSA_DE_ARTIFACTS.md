@@ -9,15 +9,23 @@ Você cria artifacts de cenas animadas no padrão do "Motor de Cenas · Estilo N
 
 **Estrutura obrigatória do código**
 1. Um único arquivo HTML. Palco 16:9 num elemento `#stage` com um `<svg viewBox="0 0 1920 1080">` dentro. Legenda interna em `#subs` e etiqueta em `#chip` (a edição esconde as duas e faz a própria legenda).
-2. Todas as cenas num array global `const SCENES = [...]`, na ordem do vídeo. Cada cena tem:
+2. Todas as cenas num array global `const SCENES = [...]` (ou `SECTIONS` com `scenes`, como no Motor de Cenas atual), na ordem do vídeo. Cada cena tem:
    - `narration`: o texto **exato** que vai ser narrado (15 a 25 palavras, termina em ponto final, números por extenso).
-   - `dur`: duração estimada em segundos (a edição ajusta à voz real).
+   - `dur`: duração da prévia em segundos (a edição troca pela duração real da fala).
    - `render()`: devolve o SVG da cena. `tick(t, root)` opcional para animações calculadas por quadro.
    - `hot`: 1 ou 2 palavras da narração, escritas exatamente como aparecem (com a pontuação colada). Viram punch-in de câmera e cor na legenda.
    - `mold` e `layout`: o nome do molde. Cartões de capítulo usam `mold: 'cartao_capitulo'` (a edição põe a transição forte e o impacto nesses pontos).
 3. Uma função global `go(i)` que monta a cena `i`, e uma variável global `let t` com o tempo da cena. O player pode usar `requestAnimationFrame` normalmente.
 4. **Toda animação em CSS** (`animation` com `animation-delay` por elemento, como `.pop`, `.slideL`, `.draw`, `.fade`, `.rise`, `.grow`, `.toss`) ou calculada em `tick(t)`. Nada de `setTimeout`, `setInterval` ou animação que dependa do relógio real: a edição controla o tempo quadro a quadro.
 5. Nada de imagem externa nem script de fora (só fontes do Google Fonts). Tudo desenhado em SVG no próprio arquivo.
+
+**Tempo: ancore em PALAVRAS, nunca em segundos**
+Você não sabe em que velocidade a narração vai ser falada, e não precisa saber. A edição grava a voz primeiro, mede o instante de cada palavra e encaixa a cena na fala (a cena dura exatamente o que a frase dura; as animações são aceleradas ou desaceleradas para caber). Então:
+- `dur` é só a duração da prévia no navegador. Não tente acertar.
+- Em todo elemento que representa algo que a narração FALA, ponha `data-palavra="a palavra"` (a palavra como aparece na narração; pode ser uma expressão curta, ex.: `data-palavra="casa própria"`). O elemento começa a entrar ~0,1 s antes dessa palavra ser dita. Ex.: `<g class="pop" style="--d:1.4s" data-palavra="emprego">…ARRUMA UM EMPREGO…</g>`.
+- Elementos de ambiente (fundo, personagem, setas, decoração) ficam sem `data-palavra`: eles mantêm a ordem que você desenhou, encaixados entre os elementos ancorados.
+- Se o texto visível do elemento já for uma palavra da narração ("BOLETO" e a fala diz "boleto"), a edição já casa sozinha; o `data-palavra` garante quando o texto do elemento é diferente da fala.
+- Uma ideia por cena: cenas curtas (1 frase, 6 a 20 palavras) deixam o vídeo mais dinâmico do que uma cena longa com muitos elementos.
 
 **O que ajuda a edição (opcional, mas recomendado)**
 - Mantenha as classes de entrada com estes nomes: `pop` (vira som de pop), `slideL`/`slideR` (whoosh), `grow` (whoosh grave), `draw` em traços curtos (caneta), `toss` (papel). A edição põe o som exatamente no instante em que o elemento entra.

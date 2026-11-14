@@ -20,11 +20,11 @@ from pathlib import Path
 import httpx
 
 from . import jobs
-from .etapas import alinhamento, camadas, montagem, narracao, plano, render, roteiro_texto, shorts
+from .etapas import alinhamento, camadas, direcao, montagem, narracao, plano, render, roteiro_texto, shorts
 
 PADRAO = {"shorts": True, "legenda_queimada_longo": False, "clima_trilha": "reflexivo", "trilha": True,
           "trilha_arquivo": None, "preset": "medium", "max_shorts": 3,
-          "roteiro": None, "narracao_vem_de": "auto", "titulo": None}
+          "roteiro": None, "narracao_vem_de": "auto", "titulo": None, "direcao": None}
 
 
 def _fala(texto: str, arq: Path, tem_boca: bool) -> dict:
@@ -57,6 +57,7 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
         # roteiro da planilha: título e, se for o caso, a narração das cenas
         modo, av = roteiro_texto.aplicar(cenas, op.get("roteiro"), op.get("narracao_vem_de", "auto"))
         avisos += av
+        avisos += direcao.aplicar(cenas, op.get("direcao"))  # JSON do diretor (coluna "direcao" da planilha)
         meta["titulo"] = (op.get("titulo") or meta.get("titulo")
                           or (roteiro_texto.titulo(op["roteiro"]) if op.get("roteiro") else None)
                           or meta.get("titulo_documento") or "Vídeo")

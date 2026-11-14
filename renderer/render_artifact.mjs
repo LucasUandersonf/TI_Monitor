@@ -111,6 +111,29 @@ await page.evaluate((palco) => {
     else { const ref = s.querySelector(':scope > rect'); s.insertBefore(g, ref ? ref.nextSibling : s.firstChild); }
   };
 
+  // "entradas": animações finitas e curtas (não as de ambiente, que duram a cena toda), agrupadas por elemento
+  let entradasAtuais = [];
+  const entradas = (D) => {
+    const m = new Map();
+    for (const a of raiz().getAnimations({ subtree: true })) {
+      const tm = a.effect.getTiming(); const el = a.effect.target;
+      if (!el || tm.iterations === Infinity || a.effect.pseudoElement) continue;
+      const d = (tm.duration || 0) / 1000;
+      if (!(d > 0) || d >= Math.max(1.6, 0.6 * D)) continue;
+      if (!m.has(el)) m.set(el, { el, anims: [], atraso: Infinity, duracao: 0, nome: a.animationName || '' });
+      const e = m.get(el); e.anims.push({ a, delay: tm.delay || 0 });
+      if ((tm.delay || 0) / 1000 < e.atraso) { e.atraso = (tm.delay || 0) / 1000; e.nome = a.animationName || e.nome; e.duracao = d; }
+    }
+    const lista = [...m.values()].sort((x, y) => x.atraso - y.atraso);
+    lista.forEach((e, k) => {
+      e.k = k;
+      const ancora = e.el.closest?.('[data-palavra]');
+      e.palavra = ancora ? ancora.getAttribute('data-palavra') : null;
+      e.grupo = ancora ? lista.findIndex(o => o.el === ancora || ancora.contains(o.el)) : k;
+      e.texto = (e.el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    });
+    return lista;
+  };
   window.__FAB = {
     cenas() {
       return lista().map((s, i) => ({
@@ -145,6 +168,15 @@ await page.evaluate((palco) => {
         const anim = window.lottie.loadAnimation({ container: div, renderer: 'svg', loop: false, autoplay: false, animationData: l.dados });
         lotties.push({ ...l, div, anim, posicionado: false });
       }
+      entradasAtuais = entradas(dur);
+      // o plano diz em que instante (tempo do artifact) cada elemento entra: casa com a palavra falada
+      for (const q of (plano?.entradas || [])) {
+        const e = entradasAtuais[q.k]; if (!e) continue;
+        const delta = q.em * 1000 - e.atraso * 1000;
+        for (const { a, delay } of e.anims) { try { a.effect.updateTiming({ delay: Math.max(0, delay + delta) }); } catch (err) {} }
+      }
+      if (!plano) window.__FAB.ultimasEntradas = entradasAtuais.map(e => ({ k: e.k, atraso: +e.atraso.toFixed(3), duracao: +e.duracao.toFixed(3),
+        nome: e.nome, texto: e.texto, palavra: e.palavra, grupo: e.grupo }));
       return raiz().getAnimations({ subtree: true }).map(a => {
         const tm = a.effect.getTiming(); const alvo = a.effect.target;
         return { nome: a.animationName || '', atraso: (tm.delay || 0) / 1000, duracao: (tm.duration || 0) / 1000,
@@ -153,7 +185,7 @@ await page.evaluate((palco) => {
     },
     seek(i, tReal, mov, boca, plano) {
       if (i !== atual || plano) this.abrir(i, mov.dur, plano);
-      const tt = tReal * (mov.relogio || 1);
+      const tt = Math.max(0, tReal) * (mov.relogio || 1);
       const ms = tt * 1000;
       let rapido = false, ultimo = null, ultimoIni = -1;
       for (const a of raiz().getAnimations({ subtree: true })) {
@@ -194,6 +226,7 @@ if (A.extrair) {
   const cenas = await page.evaluate(() => window.__FAB.cenas());
   for (const c of cenas) {
     c.animacoes = await page.evaluate(([i, d]) => window.__FAB.abrir(i, d, null), [c.indice, c.dur]);
+    c.entradas = await page.evaluate(() => window.__FAB.ultimasEntradas || []);
     c.tem_boca = await page.evaluate((p) => !!document.querySelector(p + ' [data-boca]'), PALCO);
     c.marcadores = await page.evaluate(() => window.__FAB.marcadores());
   }
@@ -212,6 +245,12 @@ const de = Number(A.de || 0), ate = Math.min(Number(A.ate ?? plano.cenas.length)
 /* câmera: punch-in (zoom rápido que volta devagar) e tremor (decai em ~0,35 s) */
 function escala(cena, tt) {
   let s = 1, x = 0, y = 0;
+  const dv = cena.deriva;
+  if (dv) { // zoom/pan lento do começo ao fim da cena (Ken Burns), suave nas pontas
+    const p = Math.min(1, Math.max(0, (tt + (cena.cabeca || 0)) / (cena.dur + (cena.cabeca || 0))));
+    const k = p * p * (3 - 2 * p) * 0.6 + p * 0.4;
+    s *= dv.de + (dv.ate - dv.de) * k; x += (dv.dx || 0) * (k - 0.5); y += (dv.dy || 0) * (k - 0.5);
+  }
   for (const m of cena.movimento || []) {
     const d = tt - m.em;
     if (m.tipo === 'punch' && d > -0.12) {
@@ -228,13 +267,14 @@ function escala(cena, tt) {
 }
 function movimento(cena, tt) {
   const a = escala(cena, tt), b = escala(cena, tt + 1 / FPS);
-  return { ...a, ds: Math.abs(b.s - a.s), dur: cena.dur, relogio: cena.relogio || 1 };
+  return { ...a, ds: Math.abs(b.s - a.s), dur: cena.dur_artifact ?? cena.dur, relogio: cena.relogio || 1 };
 }
 const bocaEm = (cena, tt) => { const v = (cena.boca || []).find(v => tt >= v[0] && tt < v[1]); return v ? v[2] : (cena.boca ? 'X' : null); };
 
 for (let i = de; i < ate; i++) {
   const cena = plano.cenas[i];
-  const total = cena.dur + (cena.cauda || 0);
+  const cabeca = cena.cabeca || 0;                          // a imagem entra antes, durante a transição
+  const total = cabeca + cena.dur - (cena.corte || 0) + (cena.cauda || 0);
   const nq = Math.round(total * FPS);
   const saida = join(pasta, `cena_${String(cena.global ?? i).padStart(3, '0')}.mp4`);
   // com motion blur: entram BLUR subquadros por quadro e o FFmpeg tira a média (tmix) e fica com 1 de cada BLUR
@@ -245,7 +285,7 @@ for (let i = de; i < ate; i++) {
   const escrever = b => new Promise(ok => ff.stdin.write(b) ? ok() : ff.stdin.once('drain', ok));
   const foto = () => page.screenshot({ type: 'jpeg', quality: 93 });
   const seek = (tReal) => {
-    const tt = Math.min(tReal, cena.dur - 1 / FPS);          // na cauda, segura o último quadro
+    const tt = Math.min(tReal, cena.dur - 1 / FPS);          // antes do início e na cauda, segura o quadro
     const pl = planoEnviado ? null : cena;                     // camadas e lottie só vão no primeiro quadro
     planoEnviado = true;
     return page.evaluate(([i, tt, mov, boca, pl]) => window.__FAB.seek(i, tt, mov, boca, pl),
@@ -253,9 +293,9 @@ for (let i = de; i < ate; i++) {
   };
   let borrados = 0, planoEnviado = false;
   for (let q = 0; q < nq; q++) {
-    const t0 = q / FPS;
+    const t0 = q / FPS - cabeca;
     const mexe = await seek(t0);
-    if (BLUR > 1 && mexe && t0 < cena.dur) {
+    if (BLUR > 1 && mexe && t0 >= 0 && t0 < cena.dur) {
       // obturador de 180°: subquadros espalhados por meio quadro, centrados no instante do quadro
       for (let k = 0; k < BLUR; k++) {
         await seek(Math.max(0, t0 + ((k + 0.5) / BLUR - 0.5) * 0.5 / FPS));
