@@ -174,6 +174,9 @@ def resultado(job_id: str):
         r["descricao_texto"] = Path(r["longo"]["descricao"]).read_text(encoding="utf-8")
     if r["longo"].get("descricao"):
         arquivos.append({"nome": Path(r["longo"]["descricao"]).name, "tipo": "descricao"})
+    for tipo, caminho in (r.get("relatorio") or {}).items():   # relatorio_qualidade.txt e tempos_das_cenas.csv
+        if Path(caminho).exists():
+            arquivos.append({"nome": Path(caminho).name, "tipo": tipo})
     for k, s in enumerate(r["shorts"], 1):
         arquivos += [{"nome": Path(s["video"]).name, "tipo": "short", "titulo": s.get("titulo"),
                       "legenda_post": s.get("legenda_post"), "hashtags": s.get("hashtags")},
@@ -295,6 +298,42 @@ def pauta_roteiro(p: PedidoRoteiro):
     return r
 
 
+def _motor_seguro() -> str:
+    from .etapas import narracao
+    try:
+        return narracao.motor_atual()
+    except Exception as e:
+        return f"ERRO: {e}"
+
+
+def _sfx_plano() -> dict:
+    from .etapas import sfx_eleven
+    return sfx_eleven.plano()
+
+
+# ---------------------------------------------------------------- ElevenLabs
+class PedidoSons(BaseModel):
+    confirmar: bool = False              # false = só mostra o que seria gerado
+    refazer: bool = False                # true = gera de novo os que já existem
+    limite_creditos: int = 1500          # para no meio se passar disso
+
+
+@app.post("/sfx/biblioteca")
+def sfx_biblioteca(p: PedidoSons):
+    """Gera (uma vez) a biblioteca de efeitos modernos com a ElevenLabs Sound Effects."""
+    from .etapas import sfx_eleven
+    if not p.confirmar:
+        return {"previa": sfx_eleven.plano(), "como_gerar": "mande de novo com confirmar: true"}
+    return sfx_eleven.gerar(p.refazer, p.limite_creditos)
+
+
+@app.get("/elevenlabs/saldo")
+def elevenlabs_saldo():
+    from .etapas import narracao
+    return {"modelo": narracao.ELEVENLABS_MODELO, "saldo": narracao.saldo_elevenlabs(),
+            "creditos_por_caractere": narracao.custo_por_caractere()}
+
+
 @app.get("/saude")
 def saude():
     from .etapas import alinhamento, camadas, mapas, narracao
@@ -311,7 +350,9 @@ def saude():
     except Exception:
         vt = False
     return {"ok": True, "gpu": gpu,
-            "voz": {"ativa": narracao._motor()[0], "motores": narracao.disponiveis()},
+            "voz": {"ativa": _motor_seguro(), "motores": narracao.disponiveis(),
+                    "elevenlabs": {"modelo": narracao.ELEVENLABS_MODELO, "saldo": narracao.saldo_elevenlabs() if narracao.ELEVENLABS_API_KEY else None}},
+            "sons_biblioteca": _sfx_plano(),
             "alinhamento": "whisperx" if alinhamento._whisperx() else "energia (ou ElevenLabs, quando for a voz)",
             "boca": "rhubarb" if shutil.which("rhubarb") else "envelope",
             "sons": {"freesound": bool(FREESOUND_TOKEN), "stable_audio": gpu, "sintese": True},

@@ -157,7 +157,8 @@ const itens = [];
 for (const j of st.filter(s => s.atual === 'concluido')) {
   const r = await this.helpers.httpRequest({ method: 'GET', url: `${cfg.worker_url}/jobs/${j.job_id}/resultado`, json: true, timeout: 30000 });
   for (const a of r.arquivos.filter(a => a.tipo !== 'metadados')) {
-    itens.push({ json: { ...a, job_id: j.job_id, titulo_video: r.titulo, data: j.data, avisos: r.avisos || [] } });
+    itens.push({ json: { ...a, job_id: j.job_id, titulo_video: r.titulo, data: j.data, avisos: r.avisos || [],
+      nota: r.qualidade ? r.qualidade.nota : null } });
   }
 }
 if (!itens.length) {
@@ -169,7 +170,7 @@ RESUMO = r"""const itens = $('Arquivos prontos').all().map(i => i.json);
 const links = $input.all().map(i => i.json.webViewLink);
 const erros = $('Ver andamento').last().json.jobs.filter(j => j.erro).map(j => `${j.nome}: ${j.erro}`);
 const porVideo = {};
-itens.forEach((a, k) => { (porVideo[a.titulo_video] ??= []).push({ tipo: a.tipo, nome: a.nome, link: links[k], titulo: a.titulo, legenda_post: a.legenda_post, hashtags: a.hashtags }); });
+itens.forEach((a, k) => { (porVideo[a.titulo_video] ??= []).push({ tipo: a.tipo, nome: a.nome, link: links[k], titulo: a.titulo, legenda_post: a.legenda_post, hashtags: a.hashtags, nota: a.nota }); });
 const linhas = [];
 for (const [titulo, arqs] of Object.entries(porVideo)) {
   linhas.push(`✅ <b>${titulo}</b>`);
@@ -178,6 +179,8 @@ for (const [titulo, arqs] of Object.entries(porVideo)) {
     else if (a.tipo === 'short') linhas.push(`📱 <a href="${a.link}">${a.titulo || a.nome}</a>${a.legenda_post ? '\n' + a.legenda_post : ''}${a.hashtags ? '\n' + a.hashtags.join(' ') : ''}`);
     else if (a.tipo === 'descricao') linhas.push(`📝 <a href="${a.link}">Descrição do YouTube</a>`);
     else if (a.tipo === 'legenda') linhas.push(`💬 <a href="${a.link}">Legenda .srt</a>`);
+    else if (a.tipo === 'relatorio') linhas.push(`🔎 <a href="${a.link}">Relatório de qualidade</a> · nota ${a.nota ?? '?'}/10`);
+    else if (a.tipo === 'tempos') linhas.push(`⏱️ <a href="${a.link}">Tempo de cada cena</a>`);
   }
 }
 if (erros.length) linhas.push('', '❌ ' + erros.join('\n❌ '));

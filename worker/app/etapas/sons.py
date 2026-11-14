@@ -45,10 +45,15 @@ CATEGORIAS = {
     "transicao":          ("transition swoosh riser short", "short riser into swoosh transition", -16),
     "bip":                ("lab beep", "single electronic beep", -17),
     "drone":              ("dark ambient drone", "dark low ambient drone, slow", -23),
+    "glitch":             ("digital glitch short", "short digital glitch stutter", -17),
+    "riser":              ("tension riser short", "tension riser building up", -18),
+    "digitar":            ("keyboard typing short", "short burst of keyboard typing", -19),
 }
 APELIDOS = {"impacto_grave": "impacto", "transicao_capitulo": "impacto", "papel_amassado": "papel",
             "drone_grave": "drone", "whoosh_curto": "whoosh", "slide": "whoosh", "dinheiro": "moeda",
-            "sino": "ding", "queda": "baque", "relogio": "tick", "digitacao": "tick", "coracao": "baque"}
+            "sino": "ding", "queda": "baque", "relogio": "tick", "digitacao": "digitar", "coracao": "baque",
+            "bipe": "bip", "censura": "bip", "beep": "bip", "erro": "glitch", "tensao": "riser", "subida": "riser",
+            "teclado": "digitar", "swoosh": "whoosh", "hit": "impacto", "boom": "impacto", "click": "tick", "clique": "tick"}
 
 
 # ---------------------------------------------------------------- síntese própria
@@ -154,6 +159,23 @@ def sintetizar(cat: str) -> np.ndarray:
         t = _t(5.0)
         x = (np.sin(2 * np.pi * 55 * t) + 0.7 * np.sin(2 * np.pi * 55.6 * t) + 0.3 * np.sin(2 * np.pi * 110.3 * t))
         x *= (0.75 + 0.25 * np.sin(2 * np.pi * 0.3 * t)) * np.minimum(1, t / 1.2) * np.minimum(1, (5 - t) / 1.5)
+    elif cat == "glitch":
+        t = _t(0.5)
+        rng = np.random.default_rng(11)
+        bloco = int(0.025 * SR)
+        x = np.repeat(rng.standard_normal(len(t) // bloco + 1), bloco)[: len(t)] * np.sign(np.sin(2 * np.pi * 180 * t))
+        x *= (rng.random(len(t) // bloco + 1).repeat(bloco)[: len(t)] > 0.35) * _env(t, 0.001, 0.25)
+    elif cat == "riser":
+        t = _t(2.0)
+        x = _seno_varrido(t, 120, 900) * (t / 2.0) ** 2 + 0.4 * _ruido(2.0, 12) * (t / 2.0) ** 3
+    elif cat == "digitar":
+        t = _t(0.9)
+        rng = np.random.default_rng(13)
+        x = np.zeros_like(t)
+        for p in np.cumsum(rng.uniform(0.05, 0.11, 14)):
+            i = int(p * SR)
+            if i + 400 < len(x):
+                x[i:i + 400] += rng.standard_normal(400) * np.exp(-np.arange(400) / 50)
     else:
         return sintetizar("pop")
     x = np.asarray(x, dtype=np.float64)

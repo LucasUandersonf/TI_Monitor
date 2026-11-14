@@ -20,15 +20,15 @@ from pathlib import Path
 import httpx
 
 from . import jobs
-from .etapas import alinhamento, camadas, direcao, montagem, narracao, plano, render, roteiro_texto, shorts
+from .etapas import alinhamento, camadas, direcao, montagem, narracao, plano, qualidade, render, roteiro_texto, shorts
 
 PADRAO = {"shorts": True, "legenda_queimada_longo": False, "clima_trilha": "reflexivo", "trilha": True,
           "trilha_arquivo": None, "preset": "medium", "max_shorts": 3,
           "roteiro": None, "narracao_vem_de": "auto", "titulo": None, "direcao": None}
 
 
-def _fala(texto: str, arq: Path, tem_boca: bool) -> dict:
-    f = narracao.falar(texto, arq)
+def _fala(texto: str, arq: Path, tem_boca: bool, anterior: str = "", seguinte: str = "") -> dict:
+    f = narracao.falar(texto, arq, anterior=anterior, seguinte=seguinte)
     ws, metodo = alinhamento.palavras(arq, texto, f["duracao"], f.pop("palavras_tts", None))
     f.update(palavras=ws, alinhamento=metodo)
     if tem_boca:
@@ -74,10 +74,15 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
 
         jobs.etapa(job_id, "narracao", "rodando")
         (p / "audio").mkdir(exist_ok=True)
+        creditos_voz = qualidade.conferir_creditos(cenas, avisos)   # para ANTES de gastar, se não der para terminar
         falas = []
-        for c in cenas:
-            falas.append(_fala(c["narracao"], p / "audio" / f"cena_{len(falas):03d}.wav", c.get("tem_boca", False)))
+        for k, c in enumerate(cenas):
+            ant = cenas[k - 1]["narracao"] if k > 0 else ""
+            seg = cenas[k + 1]["narracao"] if k + 1 < len(cenas) else ""
+            falas.append(_fala(c["narracao"], p / "audio" / f"cena_{k:03d}.wav", c.get("tem_boca", False), ant, seg))
             jobs.etapa(job_id, "narracao", "rodando", feitas=len(falas), total=len(cenas))
+        creditos_voz["gastos"] = round(sum(f.get("caracteres", 0) for f in falas) * narracao.custo_por_caractere())
+        creditos_voz["cenas_do_cache"] = sum(1 for f in falas if f.get("do_cache"))
         jobs.gravar(job_id, falas, "falas.json")
         jobs.etapa(job_id, "narracao", "ok", motor=falas[0]["motor"] if falas else None,
                    alinhamento=falas[0]["alinhamento"] if falas else None,
@@ -99,9 +104,13 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
         final = montagem.final_169(mudo, aud, saida / "longo_16x9.mp4", leg if op["legenda_queimada_longo"] else None)
         creditos = json.loads((p / "creditos.json").read_text())
         desc = montagem.descricao(pl, meta.get("titulo", ""), creditos, saida / "descricao_youtube.txt")
+        jobs.etapa(job_id, "conferencia", "rodando")
+        qa = qualidade.conferir(pl, cenas, final, saida, meta.get("titulo", ""), creditos_voz, avisos)
+        jobs.etapa(job_id, "conferencia", "ok", nota=qa["nota"], problemas=len(qa["problemas"]))
         resultado = {"job_id": job_id, "titulo": meta.get("titulo"), "duracao": pl["duracao"],
                      "longo": {"video": str(final), "legenda": str(leg), "descricao": str(desc)},
-                     "shorts": [], "avisos": avisos,
+                     "shorts": [], "avisos": avisos, "qualidade": {"nota": qa["nota"], "problemas": qa["problemas"]},
+                     "relatorio": qa["arquivos"], "creditos_elevenlabs": creditos_voz,
                      "motores": {"voz": falas[0]["motor"] if falas else None,
                                  "alinhamento": falas[0]["alinhamento"] if falas else None}}
         jobs.etapa(job_id, "mixagem_longo", "ok")
@@ -111,9 +120,8 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
             jobs.etapa(job_id, "shorts", "rodando")
             try:
                 escolhidos = shorts.escolher(meta, cenas, [f["duracao"] for f in falas])[: op["max_shorts"]]
-            except Exception as e:  # sem ANTHROPIC_API_KEY (e sem META.shorts no artifact): entrega o longo sem shorts
-                avisos.append(f"shorts não gerados: {str(e)[:120]}")
-                escolhidos = []
+            except Exception:  # sem ANTHROPIC_API_KEY (e sem META.shorts no artifact): escolha automática
+                escolhidos = shorts.automatico(meta, cenas, [f["duracao"] for f in falas], op["max_shorts"])
             for k, s in enumerate(escolhidos, 1):
                 ps = p / f"short_{k}"
                 (ps / "audio").mkdir(parents=True, exist_ok=True)

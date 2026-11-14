@@ -48,3 +48,34 @@ def escolher(meta: dict, cenas: list[dict], duracoes: list[float]) -> list[dict]
         if s["cenas"]:
             validos.append(s)
     return validos
+
+
+def automatico(meta: dict, cenas: list[dict], duracoes: list[float], maximo: int = 3,
+               alvo: tuple[float, float] = (28.0, 55.0)) -> list[dict]:
+    """Sem a API do Claude: um corte por parte do vídeo, com cenas seguidas que somam 28 a 55 s.
+    Começa na cena mais forte do trecho (a que tem mais palavras de destaque e frase curta = gancho)."""
+    partes: dict = {}
+    for i, c in enumerate(cenas):
+        partes.setdefault(c.get("capitulo") or "", []).append(i)
+    candidatos = []
+    for nome, idx in partes.items():
+        idx = idx[1:] if len(idx) > 3 else idx           # pula o cartão de abertura da parte
+        melhor = None
+        for a in range(len(idx)):
+            soma, fim = 0.0, a
+            while fim < len(idx) and idx[fim] == idx[a] + (fim - a) and soma + duracoes[idx[fim]] <= alvo[1]:
+                soma += duracoes[idx[fim]]
+                fim += 1
+            if soma < alvo[0]:
+                continue
+            c0 = cenas[idx[a]]
+            gancho = len(c0.get("destaques") or []) * 2 + (3 if len(c0["narracao"].split()) <= 12 else 0) \
+                + (2 if "?" in c0["narracao"] else 0)
+            if melhor is None or gancho > melhor[0]:
+                melhor = (gancho, idx[a:fim])
+        if melhor:
+            candidatos.append({"titulo": (str(nome).split("·")[-1].strip() or meta.get("titulo", ""))[:60],
+                               "chapeu": meta.get("titulo", "")[:40], "cenas": melhor[1], "gancho_falado": "",
+                               "nota": melhor[0]})
+    candidatos.sort(key=lambda s: -s["nota"])
+    return candidatos[:maximo]

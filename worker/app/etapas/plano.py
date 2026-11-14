@@ -140,6 +140,8 @@ def _resolver_entradas(c: dict, ws: list[dict], dur: float, relogio: float) -> l
             k = next((e["k"] for e in ents if alvo and alvo in _sem_acento(e.get("texto") or "")), None)
         if k is not None and 0 <= k < len(ents):
             diretor[k] = pal
+        else:
+            c.setdefault("_diretor_nao_achado", []).append(str(el))
     ancora_grupo: dict[int, float] = {}
     out = []
     for e in ents:
@@ -155,6 +157,8 @@ def _resolver_entradas(c: dict, ws: list[dict], dur: float, relogio: float) -> l
                 if m is not None:
                     origem = "texto"
                     break
+        if pal and m is None:
+            origem = "palavra_nao_achada"
         if m is not None:
             real = m - REGRAS["antecipa_entrada"]
             if e["k"] not in diretor and e.get("palavra"):
@@ -163,13 +167,14 @@ def _resolver_entradas(c: dict, ws: list[dict], dur: float, relogio: float) -> l
             real += ancora_grupo[e["grupo"]]
             origem = "grupo"
         out.append({"k": e["k"], "real": real, "orig": e["atraso"] / relogio, "nome": e.get("nome", ""),
-                    "duracao": e.get("duracao", 0), "origem": origem})
+                    "duracao": e.get("duracao", 0), "origem": origem, "texto": e.get("texto", ""),
+                    **({"pedida": pal} if origem == "palavra_nao_achada" else {})})
     # os que não têm palavra seguem a coreografia do artifact entre os vizinhos ancorados
     # (a seta entre "ESTUDA" e "ARRUMA UM EMPREGO" entra entre as duas, não no tempo antigo)
     anc = [o for o in out if o["origem"] in ("diretor", "data-palavra", "texto")]
     if anc:
         for o in out:
-            if o["origem"] != "artifact":
+            if o["origem"] not in ("artifact", "palavra_nao_achada"):
                 continue
             ant = max((a for a in anc if a["orig"] <= o["orig"]), key=lambda a: a["orig"], default=None)
             dep = min((a for a in anc if a["orig"] > o["orig"]), key=lambda a: a["orig"], default=None)
@@ -183,7 +188,8 @@ def _resolver_entradas(c: dict, ws: list[dict], dur: float, relogio: float) -> l
             elif dep:  # antes do primeiro ancorado: comprime entre 0 e ele
                 f = min(1.0, dep["real"] / dep["orig"]) if dep["orig"] > 0 else 1.0
                 o["real"] = o["orig"] * max(0.0, f)
-            o["origem"] = "vizinhos"
+            if o["origem"] == "artifact":
+                o["origem"] = "vizinhos"
     for o in out:
         o["real"] = round(min(limite, max(0.0, o.pop("real"))), 3)
         o["orig"] = round(o["orig"], 3)

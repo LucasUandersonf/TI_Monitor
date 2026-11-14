@@ -45,6 +45,8 @@ KOKORO_VELOCIDADE = float(env("KOKORO_VELOCIDADE", "1.0"))
 ELEVENLABS_API_KEY = env("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = env("ELEVENLABS_VOICE_ID")
 ELEVENLABS_MODELO = env("ELEVENLABS_MODELO", "eleven_multilingual_v2")
+ELEVENLABS_VELOCIDADE = float(env("ELEVENLABS_VELOCIDADE", "1.0"))        # 0.7 a 1.2
+ELEVENLABS_ESTABILIDADE = float(env("ELEVENLABS_ESTABILIDADE", "0.5"))     # mais alto = mais constante
 PIPER_MODEL = env("PIPER_MODEL", str(MODELOS / "piper" / "pt_BR-faber-medium.onnx"))
 PIPER_BIN = env("PIPER_BIN", "piper")
 

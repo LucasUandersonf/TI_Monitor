@@ -1,0 +1,184 @@
+{
+  "id": "fabPrepararEleven1",
+  "name": "06 · Preparar ElevenLabs (conferir voz + sons modernos)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "21611a0a-9f72-5166-895f-f2f102d18563",
+      "name": "▶ Preparar agora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "f0dcc2c3-cf4f-59a2-87bb-e4a2c3b12cb0",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "608c840e-e88d-59d2-82a1-0f970d0b8469",
+              "name": "worker_url",
+              "value": "http://fabrica-worker.railway.internal:8000",
+              "type": "string"
+            },
+            {
+              "id": "a0243bcc-4c0d-5ab0-8eb7-a1fc6a59439e",
+              "name": "gerar_sons",
+              "value": "nao",
+              "type": "string"
+            },
+            {
+              "id": "981b1d75-d2e5-5180-8caa-40e1ac45cfce",
+              "name": "limite_creditos_sons",
+              "value": "1500",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "1ª vez: deixe gerar_sons = nao e rode para ver o saldo e a prévia. Depois ponha sim e rode de novo.",
+      "notesInFlow": true
+    },
+    {
+      "id": "2f6c6cd8-a7bf-5aba-b168-f85acc1a1737",
+      "name": "Estado do worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/saude",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "5f2cde9f-5cc4-561c-bf1a-2ef2156333b0",
+      "name": "Conferir voz",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const s = $json;\nconst ativa = s.voz && s.voz.ativa;\nif (ativa !== 'elevenlabs') {\n  throw new Error(`A voz ativa do worker é \"${ativa}\". No Railway (serviço fabrica-worker → Variables) confira ` +\n    `ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID e TTS_MOTOR=elevenlabs.`);\n}\nconst el = s.voz.elevenlabs || {};\nreturn [{ json: { voz: ativa, modelo: el.modelo, saldo: el.saldo, sons: s.sons_biblioteca } }];"
+      }
+    },
+    {
+      "id": "bbee5bf8-48e1-5432-9882-c98890f62e99",
+      "name": "Biblioteca de sons",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/sfx/biblioteca",
+        "options": {
+          "timeout": 1800000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ confirmar: $('Config').first().json.gerar_sons === 'sim', limite_creditos: Number($('Config').first().json.limite_creditos_sons) || 1500 }) }}"
+      }
+    },
+    {
+      "id": "990bdebf-01f4-590a-9483-7396d3ba025e",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const v = $('Conferir voz').first().json;\nconst r = $json;\nreturn [{ json: {\n  voz: `${v.voz} · modelo ${v.modelo}`,\n  saldo_elevenlabs: v.saldo ? v.saldo.restante : 'não consegui ler (dê à chave a permissão User: read)',\n  sons: r.previa ? `${r.previa.a_gerar} sons a gerar (${r.previa.segundos_a_gerar} s de áudio). Para gerar: gerar_sons = sim`\n                 : `${(r.gerados || []).length} sons gerados · créditos gastos: ${r.creditos_gastos ?? '?'} · saldo: ${r.saldo ?? '?'}`,\n  erros: r.erros || []\n} }];"
+      }
+    }
+  ],
+  "connections": {
+    "▶ Preparar agora": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Estado do worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estado do worker": {
+      "main": [
+        [
+          {
+            "node": "Conferir voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir voz": {
+      "main": [
+        [
+          {
+            "node": "Biblioteca de sons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Biblioteca de sons": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {}
+}

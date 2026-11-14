@@ -9,6 +9,7 @@ Montagem final com FFmpeg:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -21,6 +22,15 @@ from . import sons
 SR = 48000
 FONTES = "/usr/share/fonts/truetype/fabrica"
 GL = {"circleopen": "CrossZoom", "fade": "fade", "slideleft": "directionalwarp", "zoomin": "ZoomInCircles"}
+
+
+def _variar(x: np.ndarray, semente: str) -> np.ndarray:
+    """Cada uso do mesmo efeito sai levemente diferente: tom ±4% e volume ±1,5 dB."""
+    h = int(hashlib.md5(semente.encode()).hexdigest()[:8], 16)
+    fator = 1 + ((h % 1000) / 1000 - 0.5) * 0.08
+    ganho = 10 ** ((((h // 1000) % 1000) / 1000 - 0.5) * 3 / 20)
+    n = max(1, int(len(x) / fator))
+    return (np.interp(np.linspace(0, len(x) - 1, n), np.arange(len(x)), x) * ganho).astype(np.float32)
 
 
 def ff(*args: str):
@@ -64,7 +74,7 @@ def audio(plano: dict, pasta: Path, clima: str = "reflexivo", com_trilha: bool =
         for s in sfx:
             arq, ganho = sons.arquivo(s["tipo"], f"{c['indice']}-{s['tipo']}-{s['em']}")
             usados.add(str(arq))
-            x = _ler(arq) * (10 ** (ganho / 20))
+            x = _variar(_ler(arq), f"{c['indice']}-{s['tipo']}-{s['em']}") * (10 ** (ganho / 20))
             j = int((c["inicio"] + s["em"]) * SR)
             if 0 <= j < total:
                 efx[j:j + len(x)] += x[: total - j]

@@ -14,6 +14,9 @@ Motores (TTS_MOTOR=auto escolhe o primeiro disponível, nesta ordem):
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
+import os
 import subprocess
 from functools import lru_cache
 from pathlib import Path
@@ -21,8 +24,9 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from ..config import (ELEVENLABS_API_KEY, ELEVENLABS_MODELO, ELEVENLABS_VOICE_ID, KOKORO_VELOCIDADE, KOKORO_VOZ,
-                      MODELOS, PIPER_BIN, PIPER_MODEL, TTS_MOTOR, VOZ_CLONE_MOTOR)
+from ..config import (DADOS, ELEVENLABS_API_KEY, ELEVENLABS_ESTABILIDADE, ELEVENLABS_MODELO, ELEVENLABS_VELOCIDADE,
+                      ELEVENLABS_VOICE_ID, KOKORO_VELOCIDADE, KOKORO_VOZ, MODELOS, PIPER_BIN, PIPER_MODEL, TTS_MOTOR,
+                      VOZ_CLONE_MOTOR)
 from . import texto_fala, voz_clonada
 
 SR = 48000
@@ -66,12 +70,23 @@ def _obter(nome: str):
 
 @lru_cache(maxsize=1)
 def _motor():
-    for nome in ([TTS_MOTOR] if TTS_MOTOR != "auto" else ORDEM):
+    if TTS_MOTOR != "auto":  # motor escolhido: se não funcionar, para com o motivo (nunca troca de voz no meio)
+        try:
+            return TTS_MOTOR, _obter(TTS_MOTOR)
+        except Exception as e:
+            msg = ("configure ELEVENLABS_API_KEY e ELEVENLABS_VOICE_ID nas variáveis do worker no Railway"
+                   if TTS_MOTOR == "elevenlabs" else str(e))
+            raise RuntimeError(f"voz {TTS_MOTOR} indisponível: {msg}")
+    for nome in ORDEM:
         try:
             return nome, _obter(nome)
         except Exception:
             continue
     return "estimado", None
+
+
+def motor_atual() -> str:
+    return _motor()[0]
 
 
 def _para_48k(audio: np.ndarray, sr: int) -> np.ndarray:
@@ -91,20 +106,112 @@ def _aparar(audio: np.ndarray, limiar: float = 0.01) -> tuple[np.ndarray, float]
     return audio[ini: idx[-1] + int(0.08 * SR)], ini / SR
 
 
-def _elevenlabs(texto: str) -> tuple[np.ndarray, list[dict]]:
+ELEVEN = "https://api.elevenlabs.io/v1"
+CACHE_TTS = Path(os.environ.get("FABRICA_CACHE_TTS", str(DADOS / "cache" / "tts")))
+
+
+def _eh_v3() -> bool:
+    return "v3" in (ELEVENLABS_MODELO or "")
+
+
+def custo_por_caractere() -> float:
+    """Créditos por caractere do modelo (Flash/Turbo custam metade)."""
+    m = (ELEVENLABS_MODELO or "").lower()
+    return 0.5 if ("flash" in m or "turbo" in m) else 1.0
+
+
+def _chave_cache(texto: str) -> str:
+    base = json.dumps([texto, ELEVENLABS_VOICE_ID, ELEVENLABS_MODELO, ELEVENLABS_VELOCIDADE, ELEVENLABS_ESTABILIDADE],
+                      ensure_ascii=False)
+    return hashlib.sha256(base.encode()).hexdigest()[:24]
+
+
+def em_cache(texto: str) -> bool:
+    return (CACHE_TTS / f"{_chave_cache(texto_fala.preparar(texto))}.json").exists()
+
+
+def saldo_elevenlabs() -> dict | None:
+    """Créditos restantes na conta (None se não deu para consultar)."""
     import httpx
-    r = httpx.post(f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/with-timestamps",
-                   params={"output_format": "pcm_44100"}, timeout=120,
-                   headers={"xi-api-key": ELEVENLABS_API_KEY},
-                   json={"text": texto, "model_id": ELEVENLABS_MODELO, "language_code": "pt",
-                         "voice_settings": {"stability": 0.45, "similarity_boost": 0.8, "style": 0.25}})
-    r.raise_for_status()
-    d = r.json()
-    pcm = np.frombuffer(base64.b64decode(d["audio_base64"]), dtype=np.int16).astype(np.float32) / 32768
+    try:
+        r = httpx.get(f"{ELEVEN}/user/subscription", headers={"xi-api-key": ELEVENLABS_API_KEY}, timeout=20)
+        r.raise_for_status()
+        d = r.json()
+        return {"usados": d.get("character_count"), "limite": d.get("character_limit"),
+                "restante": (d.get("character_limit") or 0) - (d.get("character_count") or 0), "plano": d.get("tier")}
+    except Exception:
+        return None
+
+
+def _decodificar(conteudo: bytes, formato: str) -> np.ndarray:
+    if formato.startswith("pcm_"):
+        return _para_48k(np.frombuffer(conteudo, dtype=np.int16).astype(np.float32) / 32768, int(formato.split("_")[1]))
+    r = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "f32le", "-ac", "1", "-ar", str(SR), "pipe:1"],
+                       input=conteudo, capture_output=True, check=True)
+    return np.frombuffer(r.stdout, dtype=np.float32).copy()
+
+
+_FORMATO = {"atual": "pcm_44100"}
+
+
+def _pedir_elevenlabs(corpo: dict) -> tuple[np.ndarray, dict]:
+    """Chama a API com novas tentativas (limite de taxa, instabilidade) e erros claros (chave, créditos)."""
+    import time
+    import httpx
+    ultimo = ""
+    for tentativa in range(6):
+        try:
+            r = httpx.post(f"{ELEVEN}/text-to-speech/{ELEVENLABS_VOICE_ID}/with-timestamps",
+                           params={"output_format": _FORMATO["atual"]}, timeout=180,
+                           headers={"xi-api-key": ELEVENLABS_API_KEY}, json=corpo)
+        except httpx.HTTPError as e:
+            ultimo = str(e)
+            time.sleep(2 * 2 ** tentativa)
+            continue
+        if r.status_code == 200:
+            d = r.json()
+            return _decodificar(base64.b64decode(d["audio_base64"]), _FORMATO["atual"]), d.get("alignment") or {}
+        txt = r.text[:400]
+        if r.status_code in (400, 403) and "output_format" in txt and _FORMATO["atual"] != "mp3_44100_128":
+            _FORMATO["atual"] = "mp3_44100_128"      # plano sem PCM: usa MP3 de alta qualidade
+            continue
+        if "quota_exceeded" in txt or ("credit" in txt.lower() and r.status_code in (401, 402, 403)):
+            raise RuntimeError("ElevenLabs: créditos insuficientes para terminar a narração. Recarregue e rode de novo "
+                               "(as cenas já narradas ficam guardadas e não são cobradas outra vez)")
+        if r.status_code == 401 or "invalid_api_key" in txt:
+            raise RuntimeError("ElevenLabs recusou a chave (ELEVENLABS_API_KEY errada ou sem permissão de Text to Speech)")
+        if r.status_code == 404 or "voice_not_found" in txt:
+            raise RuntimeError(f"ElevenLabs: voz {ELEVENLABS_VOICE_ID} não encontrada (confira ELEVENLABS_VOICE_ID)")
+        if r.status_code in (429, 500, 502, 503, 504):
+            ultimo = f"{r.status_code} {txt}"
+            time.sleep(min(60, 3 * 2 ** tentativa))
+            continue
+        raise RuntimeError(f"ElevenLabs falhou ({r.status_code}): {txt}")
+    raise RuntimeError(f"ElevenLabs indisponível depois de 6 tentativas: {ultimo[:300]}")
+
+
+def _elevenlabs(texto: str, anterior: str = "", seguinte: str = "") -> tuple[np.ndarray, list[dict], bool]:
+    """Fala uma cena. Guarda em cache: rodar o mesmo vídeo de novo não gasta crédito.
+    anterior/seguinte (texto das cenas vizinhas) mantêm a entonação contínua entre as cenas."""
+    CACHE_TTS.mkdir(parents=True, exist_ok=True)
+    chave = _chave_cache(texto)
+    meta, wav = CACHE_TTS / f"{chave}.json", CACHE_TTS / f"{chave}.wav"
+    if meta.exists() and wav.exists():
+        a, _ = sf.read(wav, dtype="float32")
+        return a, json.loads(meta.read_text(encoding="utf-8")), True
+    corpo = {"text": texto, "model_id": ELEVENLABS_MODELO, "language_code": "pt",
+             "apply_text_normalization": "auto",
+             "voice_settings": {"stability": ELEVENLABS_ESTABILIDADE, "similarity_boost": 0.8, "style": 0.15,
+                                "use_speaker_boost": True, "speed": ELEVENLABS_VELOCIDADE}}
+    if not _eh_v3():  # o v3 não aceita contexto; v2/flash/turbo aceitam
+        if anterior:
+            corpo["previous_text"] = texto_fala.preparar(anterior)[-600:]
+        if seguinte:
+            corpo["next_text"] = texto_fala.preparar(seguinte)[:300]
+    audio, al = _pedir_elevenlabs(corpo)
     # letras -> palavras
-    al = d.get("alignment") or {}
     letras, ini, fim = al.get("characters", []), al.get("character_start_times_seconds", []), al.get("character_end_times_seconds", [])
-    palavras, atual, t0 = [], "", None
+    palavras, atual, t0, ultimo = [], "", None, 0.0
     for ch, a, b in zip(letras, ini, fim):
         if ch.isspace():
             if atual:
@@ -117,18 +224,23 @@ def _elevenlabs(texto: str) -> tuple[np.ndarray, list[dict]]:
         ultimo = b
     if atual:
         palavras.append({"w": atual, "ini": t0, "fim": ultimo})
-    return _para_48k(pcm, 44100), palavras
+    sf.write(wav, audio, SR, subtype="PCM_24")
+    meta.write_text(json.dumps(palavras, ensure_ascii=False), encoding="utf-8")
+    return audio, palavras, False
 
 
-def falar(texto: str, saida: Path, semente: int = 7, motor: str | None = None) -> dict:
-    """motor: força um motor (ex.: 'kokoro_onnx'); sem ele, usa o escolhido por TTS_MOTOR / auto."""
+def falar(texto: str, saida: Path, semente: int = 7, motor: str | None = None,
+          anterior: str = "", seguinte: str = "") -> dict:
+    """motor: força um motor (ex.: 'kokoro_onnx'); sem ele, usa o escolhido por TTS_MOTOR / auto.
+    anterior/seguinte: texto das cenas vizinhas (a ElevenLabs usa para a entonação não "recomeçar" a cada cena)."""
     nome, m = (motor, _obter(motor)) if motor else _motor()
+    do_cache = False
     if nome == "clone":
         return voz_clonada.falar(texto, saida, m, semente)
     palavras = None
     original, texto = texto, texto_fala.preparar(texto)   # números por extenso e pronúncia
     if nome == "elevenlabs":
-        audio, palavras = _elevenlabs(texto)
+        audio, palavras, do_cache = _elevenlabs(texto, anterior, seguinte)
     elif nome == "kokoro_onnx":
         amostras, sr = m.create(texto, voice=KOKORO_VOZ, speed=KOKORO_VELOCIDADE, lang="pt-br")
         audio = _para_48k(amostras, sr)
@@ -156,7 +268,8 @@ def falar(texto: str, saida: Path, semente: int = 7, motor: str | None = None) -
         if texto != original:  # a ElevenLabs falou o texto preparado; a legenda usa o original
             from . import transcricao
             palavras = transcricao.alinhar(original, palavras, len(audio) / SR)
-    return {"arquivo": str(saida), "duracao": len(audio) / SR, "motor": nome, "palavras_tts": palavras}
+    return {"arquivo": str(saida), "duracao": len(audio) / SR, "motor": nome, "palavras_tts": palavras,
+            "caracteres": len(texto) if nome == "elevenlabs" and not do_cache else 0, "do_cache": do_cache}
 
 
 def disponiveis() -> dict:
