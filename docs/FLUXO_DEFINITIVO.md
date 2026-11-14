@@ -28,7 +28,8 @@
 1. **Chave da ElevenLabs no worker.** No Railway: projeto → serviço `fabrica-worker` → **Variables** → adicione:
    - `ELEVENLABS_API_KEY` = sua chave (ElevenLabs → Developers → API Keys; dê as permissões *Text to Speech*, *Sound Effects* e *User: read*)
    - `ELEVENLABS_VOICE_ID` = ID da voz (ElevenLabs → Vozes → clique na voz → *Copy voice ID*). Pode ser a sua voz clonada lá dentro.
-   - Já deixei `TTS_MOTOR=elevenlabs` e `ELEVENLABS_MODELO=eleven_multilingual_v2`.
+   - `TTS_MOTOR` = `elevenlabs` (garante que o vídeo nunca sai com outra voz: sem chave, ele para com o motivo)
+   - `ELEVENLABS_MODELO` = `eleven_multilingual_v2` (melhor em português) ou `eleven_flash_v2_5` (metade do custo)
    - Opcionais: `ELEVENLABS_VELOCIDADE` (0.7 a 1.2, padrão 1.0) e `ELEVENLABS_ESTABILIDADE` (padrão 0.5; mais alto = voz mais constante).
 2. **n8n:** importe `06_preparar_elevenlabs.json` e rode. Ele confere a voz e mostra o saldo.
    Depois ponha `gerar_sons = sim` e rode de novo: gera a biblioteca de efeitos modernos (uma vez só, limite de 1.500 créditos).
