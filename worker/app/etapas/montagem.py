@@ -24,7 +24,12 @@ GL = {"circleopen": "CrossZoom", "fade": "fade", "slideleft": "directionalwarp",
 
 
 def ff(*args: str):
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True)
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], capture_output=True, text=True)
+    if r.returncode != 0:
+        erro = (r.stderr or "").strip()
+        print(f"[ffmpeg] falhou ({r.returncode}): {erro[-3000:]}", flush=True)
+        motivo = "memória insuficiente (o processo foi encerrado)" if r.returncode in (-9, 137) else (erro.splitlines()[-1] if erro else f"código {r.returncode}")
+        raise RuntimeError(f"FFmpeg falhou: {motivo[:400]}")
 
 
 def _ler(arquivo: Path) -> np.ndarray:
@@ -111,18 +116,17 @@ def _normalizar(entrada: Path, saida: Path) -> Path:
 
 
 # ---------------------------------------------------------------- vídeo
-def juntar(clips: list[Path], plano: dict, saida: Path) -> Path:
-    """Encadeia as cenas com transição. Offset de cada junção = início da cena seguinte (a cauda compensa)."""
-    cenas = plano["cenas"]
+def _xfade(clips: list[Path], cenas: list[dict], base: float, saida: Path, preset: str = "medium"):
+    """Junta poucos clipes com transição. Offsets relativos ao início do primeiro clipe do grupo."""
     if len(clips) == 1:
         ff("-i", str(clips[0]), "-c", "copy", str(saida))
-        return saida
+        return
     entradas = sum((["-i", str(c)] for c in clips), [])
     partes, atual = [], "[0:v]"
     for k in range(1, len(clips)):
         ant = cenas[k - 1]
         nome, d = ant["transicao"] or "fade", ant["cauda"] or 0.04
-        off = cenas[k]["inicio"]
+        off = round(cenas[k]["inicio"] - base, 3)
         out = f"[v{k}]"
         if TRANSICAO_MOTOR == "gltransition":
             glsl = GL_TRANSITIONS_DIR / f"{GL.get(nome, nome)}.glsl"
@@ -130,10 +134,30 @@ def juntar(clips: list[Path], plano: dict, saida: Path) -> Path:
         else:
             partes.append(f"{atual}[{k}:v]xfade=transition={nome}:duration={d}:offset={off}{out}")
         atual = out
-    ff(*entradas, "-filter_complex", ";".join(partes), "-map", atual, "-c:v", "libx264", "-preset", "medium",
-       "-crf", "17", "-pix_fmt", "yuv420p", str(saida))
-    return saida
+    ff(*entradas, "-filter_complex", ";".join(partes), "-map", atual, "-c:v", "libx264", "-preset", preset,
+       "-crf", "16", "-pix_fmt", "yuv420p", str(saida))
 
+
+def juntar(clips: list[Path], plano: dict, saida: Path, grupo: int = 8, nivel: int = 0) -> Path:
+    """Encadeia as cenas com transição, em blocos de `grupo` cenas para caber na memória
+    (65 cenas de uma vez passam de 5 GB). Cada bloco termina com a "cauda" da última cena,
+    então a transição entre blocos é feita do mesmo jeito que entre cenas."""
+    cenas = plano["cenas"]
+    if len(clips) <= grupo:
+        _xfade(clips, cenas, cenas[0]["inicio"], saida)
+        return saida
+    blocos, info = [], []
+    for g in range(0, len(clips), grupo):
+        sub_c, sub_cl = cenas[g: g + grupo], clips[g: g + grupo]
+        arq = saida.with_name(f"{saida.stem}_n{nivel}_bloco{g // grupo:02d}.mp4")
+        _xfade(sub_cl, sub_c, sub_c[0]["inicio"], arq)
+        blocos.append(arq)
+        ult = sub_c[-1]
+        info.append({"inicio": sub_c[0]["inicio"], "transicao": ult["transicao"], "cauda": ult["cauda"]})
+    juntar(blocos, {"cenas": info}, saida, grupo, nivel + 1)
+    for b in blocos:
+        b.unlink(missing_ok=True)
+    return saida
 
 ACABAMENTO = "noise=alls=2:allf=t,vignette=angle=PI/7"
 
