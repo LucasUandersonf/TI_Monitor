@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -10,11 +11,15 @@ from ..config import FPS, MOTION_BLUR, RENDER_PARALELO, RENDERER, RESOLUCAO
 
 
 def _rodar(cmd: list[str], timeout: int | None = None) -> subprocess.CompletedProcess:
-    """Roda o renderer e, se falhar, devolve o erro dele (não só o código de saída)."""
+    """Roda o renderer e, se falhar, devolve o erro de verdade (não só o código de saída)."""
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0:
-        detalhe = (r.stderr or r.stdout or "").strip().splitlines()
-        raise RuntimeError("renderer falhou: " + " | ".join(detalhe[-4:])[:800])
+        saida = (r.stderr or "") + "\n" + (r.stdout or "")
+        print(f"[renderer] falhou ({r.returncode}): {' '.join(cmd[:4])}\n{saida[-6000:]}", flush=True)  # vai para os logs
+        linhas = [l.strip() for l in saida.splitlines() if l.strip()]
+        importantes = [l for l in linhas if re.search(r"(Error|error:|ReferenceError|TypeError|Timeout|Executable|\[artifact\])", l)]
+        detalhe = " | ".join((importantes or linhas)[:4])
+        raise RuntimeError("renderer falhou: " + detalhe[:900])
     return r
 
 
