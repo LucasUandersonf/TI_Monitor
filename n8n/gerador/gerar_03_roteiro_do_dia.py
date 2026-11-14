@@ -33,7 +33,7 @@ def iff(name, pos, left, tipo, op, right="", single=False):
         "conditions": [{"id": nid(), "leftValue": left, "rightValue": right, "operator": o}], "combinator": "and"}, "options": {}})
 
 CAMPOS = [
-    ("worker_url", "https://SEU-WORKER.up.railway.app"),
+    ("worker_url", "http://fabrica-worker.railway.internal:8000"),
     ("planilha_id", "COLE_AQUI_O_ID_DA_PLANILHA"),
     ("drive_pasta_artifacts", "COLE_AQUI_O_ID_DA_PASTA_02_ARTIFACTS"),
     ("drive_pasta_prontos", "COLE_AQUI_O_ID_DA_PASTA_03_VIDEOS_PRONTOS"),

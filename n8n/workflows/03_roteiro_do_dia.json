@@ -51,7 +51,7 @@
             {
               "id": "8996454d-4103-57a6-ae9d-c11fe337827a",
               "name": "worker_url",
-              "value": "https://SEU-WORKER.up.railway.app",
+              "value": "http://fabrica-worker.railway.internal:8000",
               "type": "string"
             },
             {
