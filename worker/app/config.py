@@ -67,7 +67,7 @@ GL_TRANSITIONS_DIR = Path(env("GL_TRANSITIONS_DIR", "/opt/gl-transitions/transit
 RENDER_PARALELO = int(env("RENDER_PARALELO", "3"))
 FPS = int(env("FPS", "30"))
 # altura do vídeo longo: 1080, 1440 ou 2160 (4K). Acima de 1080 o YouTube usa VP9/AV1 e a imagem fica mais limpa
-RESOLUCAO = int(env("RESOLUCAO", "1080"))
+RESOLUCAO = int(env("RESOLUCAO", "1440"))   # 1440p: o YouTube entrega em VP9/AV1, imagem bem mais nítida
 MOTION_BLUR = int(env("MOTION_BLUR", "3"))       # subquadros por quadro em movimento (1 = desligado)
 TEXTURA_PAPEL = float(env("TEXTURA_PAPEL", "0.07"))  # opacidade da textura de papel (0 = desligada)
 
