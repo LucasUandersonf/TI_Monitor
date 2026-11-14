@@ -15,13 +15,13 @@ def node(name, typ, ver, pos, params, **kw):
     n.update(kw)
     return n
 CFG = "$('Config').first().json"
-def http(name, pos, method, url, body=None, timeout=120000, arquivo=False):
+def http(name, pos, method, url, body=None, timeout=120000, arquivo=False, **kw):
     p = {"method": method, "url": url, "options": {"timeout": timeout}}
     if body:
         p.update({"sendBody": True, "specifyBody": "json", "jsonBody": body})
     if arquivo:
         p["options"]["response"] = {"response": {"responseFormat": "file", "outputPropertyName": "data"}}
-    return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p)
+    return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, **kw)
 def code(name, pos, js, **kw):
     return node(name, "n8n-nodes-base.code", 2, pos, {"mode": "runOnceForAllItems", "jsCode": js}, **kw)
 def rl(v, mode="id"): return {"__rl": True, "mode": mode, "value": v}
@@ -41,8 +41,9 @@ CAMPOS = [
     ("gerar_shorts", "sim"),
     ("clima_trilha", "reflexivo"),
     ("trilha_arquivo", ""),
+    ("voz", ""),
+    ("limite_minutos", "120"),
     ("testar_com_a_data", ""),
-    ("telegram_bot_token", ""),
     ("telegram_chat_id", ""),
 ]
 
@@ -127,6 +128,7 @@ for (let i = 0; i < $input.all().length; i++) {
       shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,
       clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null,
       narracao_vem_de: cfg.narracao_vem_de || 'auto',
+      voz: cfg.voz || null,
       direcao: l.direcao || null
     }
   } });
@@ -136,19 +138,24 @@ return saida;"""
 GUARDAR = r"""const linhas = $('Casar roteiro com artifact').all().map(i => i.json);
 return [{ json: { jobs: $input.all().map((i, k) => ({ job_id: i.json.job_id, nome: linhas[k].nome_video, data: linhas[k].data })), voltas: 0 } }];"""
 
-ANDAMENTO = r"""// Pergunta ao worker como está cada edição (fica em laço até todas terminarem)
+ANDAMENTO = r"""// Pergunta ao worker como está cada edição (fica em laço até todas terminarem, com limite de tempo)
 const cfg = $('Config').first().json;
+const limite = Number(cfg.limite_minutos) || 120;          // cada volta espera 1 min
+if ($runIndex >= limite) {
+  throw new Error(`As edições passaram de ${limite} minutos sem terminar. Veja os logs do fabrica-worker no Railway ` +
+    `(jobs: ${$('Guardar jobs').first().json.jobs.map(j => j.job_id).join(', ')}).`);
+}
 const jobs = $('Guardar jobs').first().json.jobs;
 const status = [];
 for (const j of jobs) {
   let e = {};
   try { e = await this.helpers.httpRequest({ method: 'GET', url: `${cfg.worker_url}/jobs/${j.job_id}`, json: true, timeout: 30000 }); }
-  catch (err) { e = { atual: 'sem resposta', concluido: false }; }
+  catch (err) { e = { atual: 'sem resposta', concluido: false }; }   // worker reiniciando: tenta de novo na próxima volta
   const etapa = e.etapas?.[e.atual] || {};
   status.push({ ...j, atual: e.atual, concluido: !!e.concluido, erro: e.atual === 'erro' ? (etapa.erro || 'falhou') : null,
                 progresso: etapa.total ? `${etapa.feitas}/${etapa.total}` : undefined });
 }
-return [{ json: { todos_terminaram: status.every(s => s.concluido), jobs: status } }];"""
+return [{ json: { todos_terminaram: status.every(s => s.concluido), voltas: $runIndex + 1, jobs: status } }];"""
 
 PRONTOS = r"""// Lista os arquivos prontos de cada edição que deu certo
 const cfg = $('Config').first().json;
@@ -191,16 +198,21 @@ n = [
     node("▶ Testar agora", "n8n-nodes-base.manualTrigger", 1, [0, 120], {}),
     node("Config", "n8n-nodes-base.set", 3.4, [220, 0], {"mode": "manual", "includeOtherFields": False, "assignments": {"assignments": [
         {"id": nid(), "name": k, "value": v, "type": "string"} for k, v in CAMPOS]}, "options": {}},
-        notes="PREENCHA: worker, ID da planilha e das pastas. narracao_vem_de: auto | roteiro | artifact. testar_com_a_data: deixe vazio (usa hoje) ou ponha 2026-11-20 para testar outra data.",
+        notes="PREENCHA: ID da planilha e das pastas. voz: vazio (a do worker) | google | elevenlabs | kokoro_onnx. "
+              "narracao_vem_de: auto | roteiro | artifact. testar_com_a_data: vazio (hoje) ou 2026-11-20. "
+              "Telegram: ponha o chat_id e escolha a credencial no último nó.",
         notesInFlow=True),
-    http("Worker está no ar?", [440, 0], "GET", f"={{{{ {CFG}.worker_url }}}}/saude", None, 30000),
+    # o worker dorme quando parado (Railway): a primeira chamada o acorda, por isso o tempo longo e as novas tentativas
+    http("Worker está no ar?", [440, 0], "GET", f"={{{{ {CFG}.worker_url }}}}/saude", None, 120000,
+         retryOnFail=True, maxTries=4, waitBetweenTries=5000),
     node("Baixar planilha", "n8n-nodes-base.googleDrive", 3, [660, 0], {"operation": "download", "fileId": rl(f"={{{{ {CFG}.planilha_id }}}}"),
         "options": {"googleFileConversion": {"conversion": {"sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}}}},
         notes="Funciona com Excel (.xlsx) salvo no Drive ou com Planilha Google.", notesInFlow=True),
     node("Ler planilha", "n8n-nodes-base.extractFromFile", 1, [880, 0], {"operation": "xlsx", "binaryPropertyName": "data", "options": {"headerRow": True}}),
     code("Linhas de hoje", [1100, 0], LINHAS_DE_HOJE),
     node("Arquivos da pasta", "n8n-nodes-base.googleDrive", 3, [1320, 0], {"resource": "fileFolder", "searchMethod": "query",
-        "queryString": "trashed = false",  # o Drive só busca pelo começo das palavras; o filtro de .html fica no nó seguinte "returnAll": True,
+        # o Drive só busca pelo começo das palavras; o filtro de .html fica no nó seguinte
+        "queryString": "trashed = false", "returnAll": True,
         "filter": {"folderId": rl(f"={{{{ {CFG}.drive_pasta_artifacts }}}}"), "whatToSearch": "files"},
         "options": {"fields": ["id", "name"]}}, executeOnce=True, alwaysOutputData=True),
     code("Casar roteiro com artifact", [1540, 0], CASAR),
@@ -217,9 +229,11 @@ n = [
         "name": "={{ $('Arquivos prontos').item.json.data }} · {{ $('Arquivos prontos').item.json.titulo_video }} · {{ $('Arquivos prontos').item.json.nome }}",
         "driveId": rl("My Drive", "list"), "folderId": rl(f"={{{{ {CFG}.drive_pasta_prontos }}}}"), "inputDataFieldName": "data", "options": {}}),
     code("Resumo", [3960, -100], RESUMO),
-    iff("Tem Telegram?", [4180, -100], f"={{{{ {CFG}.telegram_bot_token }}}}", "string", "notEmpty", single=True),
-    http("Avisar no Telegram", [4400, -200], "POST", f"=https://api.telegram.org/bot{{{{ {CFG}.telegram_bot_token }}}}/sendMessage",
-         f"={{{{ JSON.stringify({{ chat_id: {CFG}.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: $json.texto }}) }}}}", 30000),
+    iff("Tem Telegram?", [4180, -100], f"={{{{ {CFG}.telegram_chat_id }}}}", "string", "notEmpty", single=True),
+    # token fica numa credencial do n8n (não no fluxo): escolha a credencial "Telegram API" neste nó depois de importar
+    node("Avisar no Telegram", "n8n-nodes-base.telegram", 1.2, [4400, -200], {
+        "chatId": f"={{{{ {CFG}.telegram_chat_id }}}}", "text": "={{ $json.texto }}",
+        "additionalFields": {"appendAttribution": False, "disable_web_page_preview": True, "parse_mode": "HTML"}}),
 ]
 c = {}
 def liga(a, b, saida=0):

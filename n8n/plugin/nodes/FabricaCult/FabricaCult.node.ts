@@ -112,7 +112,7 @@ export class FabricaCult implements INodeType {
 				options: [{ name: 'Reflexivo', value: 'reflexivo' }, { name: 'Mistério', value: 'misterio' }, { name: 'Tensão', value: 'tensao' }],
 				displayOptions: { show: { operacao: ['editar'] } },
 			},
-			{ displayName: 'Trilha Própria (URL ou Caminho)', name: 'trilhaArquivo', type: 'string', default: '', description: 'Vazio = biblioteca, ACE-Step ou Openverse', displayOptions: { show: { operacao: ['editar'] } } },
+			{ displayName: 'Trilha Própria (URL ou Caminho)', name: 'trilhaArquivo', type: 'string', default: '', description: 'Vazio = pasta sons/trilha do worker', displayOptions: { show: { operacao: ['editar'] } } },
 			{ displayName: 'Legenda Queimada No Longo', name: 'legendaLongo', type: 'boolean', default: false, displayOptions: { show: { operacao: ['editar'] } } },
 			{ displayName: 'Job ID', name: 'jobId', type: 'string', default: '={{ $json.job_id }}', displayOptions: { show: { operacao: ['status', 'resultado', 'arquivo'] } } },
 			{ displayName: 'Arquivo', name: 'arquivo', type: 'string', default: '={{ $json.nome }}', displayOptions: { show: { operacao: ['arquivo'] } } },

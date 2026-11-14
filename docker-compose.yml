@@ -1,6 +1,6 @@
 # Fábrica Cult · n8n + Postgres + worker de edição
-#   docker compose --profile cpu up -d         (CPU: Kokoro, sem Stable Audio)
-#   docker compose --profile gpu up -d         (GPU: Chatterbox, WhisperX rápido, Stable Audio, ACE-Step)
+#   docker compose --profile cpu up -d         (CPU: o normal)
+#   docker compose --profile gpu up -d         (GPU: arte FLUX quando o artifact pede)
 services:
   postgres:
     image: postgres:16

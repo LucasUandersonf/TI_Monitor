@@ -193,31 +193,11 @@ def arquivo(job_id: str, nome: str):
     return FileResponse(p, filename=nome)
 
 
-# ---------------------------------------------------------------- sua voz
-class PedidoVoz(BaseModel):
-    audio_base64: str                       # gravação da sua voz (wav, mp3, m4a, ogg...)
-    nome_arquivo: str = "gravacao.m4a"
-
-
-@app.post("/voz/referencia")
-def voz_referencia(p: PedidoVoz):
-    """Cadastra a sua voz: limpa a gravação, escolhe o melhor trecho e transcreve."""
-    from .etapas import referencia
-    from .config import BIBLIOTECA
-    bruto = BIBLIOTECA / "voz" / ("_entrada" + (Path(p.nome_arquivo).suffix or ".wav"))
-    bruto.parent.mkdir(parents=True, exist_ok=True)
-    bruto.write_bytes(base64.b64decode(p.audio_base64))
-    r = referencia.preparar(bruto)
-    bruto.unlink(missing_ok=True)
-    from .etapas import narracao
-    narracao._motor.cache_clear()          # a partir de agora a narração usa a sua voz
-    return r
-
-
+# ---------------------------------------------------------------- voz
 class PedidoTesteVoz(BaseModel):
     texto: str = ("Seu cérebro não está procurando a verdade. Está procurando conforto. "
                   "E em dois mil e vinte e três, noventa milhões de pessoas provaram isso.")
-    motores: list[str] = ["clone_qwen3", "clone_chatterbox", "kokoro_onnx"]
+    motores: list[str] = ["elevenlabs", "google", "kokoro_onnx"]
 
 
 @app.post("/voz/teste")
@@ -225,7 +205,7 @@ def voz_teste(p: PedidoTesteVoz):
     """Gera a mesma frase com cada motor, para você ouvir e escolher (arquivos em /voz/arquivo/<nome>)."""
     import time as _t
     from .config import BIBLIOTECA
-    from .etapas import narracao, voz_clonada
+    from .etapas import narracao
     pasta = BIBLIOTECA / "voz" / "testes"
     pasta.mkdir(parents=True, exist_ok=True)
     out = []
@@ -233,25 +213,13 @@ def voz_teste(p: PedidoTesteVoz):
         arq = pasta / f"teste_{motor}.wav"
         t0 = _t.time()
         try:
-            if motor.startswith("clone_"):
-                r = voz_clonada.falar(p.texto, arq, motor.removeprefix("clone_"))
-            else:
-                r = narracao.falar(p.texto, arq, motor=motor)
+            r = narracao.falar(p.texto, arq, motor=motor)
             out.append({"motor": motor, "arquivo": arq.name, "duracao": round(r["duracao"], 2),
-                        "segundos_para_gerar": round(_t.time() - t0, 1), "conferencia": r.get("conferencia")})
+                        "segundos_para_gerar": round(_t.time() - t0, 1),
+                        "tempo_das_palavras": bool(r.get("palavras_tts"))})
         except Exception as e:
             out.append({"motor": motor, "erro": str(e)[:300]})
     return {"texto": p.texto, "resultados": out}
-
-
-@app.post("/voz/baixar-modelos")
-def voz_baixar_modelos(motores: str = "qwen3_tts_base,whisper_small"):
-    """Baixa os pesos antes do primeiro vídeo (opcional: sem isso, baixa na primeira vez que usar)."""
-    from .etapas import modelos
-    feitos = {}
-    for nome in [m.strip() for m in motores.split(",") if m.strip()]:
-        feitos[nome] = str(modelos.baixar(nome))
-    return {"ok": True, "baixados": feitos}
 
 
 @app.get("/voz/arquivo/{nome}")
@@ -336,27 +304,20 @@ def elevenlabs_saldo():
 
 @app.get("/saude")
 def saude():
-    from .etapas import alinhamento, camadas, mapas, narracao
-    from .config import ACE_STEP_CMD, ANIMATED_DRAWINGS_CMD, FREESOUND_TOKEN, MOTION_BLUR, OPENVERSE_ATIVO, TEXTURA_PAPEL
-    import shutil
-    try:
-        import torch
-        gpu = torch.cuda.is_available()
-    except Exception:
-        gpu = False
-    try:
-        import vtracer  # noqa: F401
-        vt = True
-    except Exception:
-        vt = False
-    return {"ok": True, "gpu": gpu,
+    from .etapas import camadas, mapas, narracao, transcricao
+    from .config import BIBLIOTECA, MOTION_BLUR, SONS_REPO, TEXTURA_PAPEL
+    EXT = (".wav", ".ogg", ".mp3", ".flac")
+
+    def contar(*pastas):
+        return sum(1 for p in pastas if p.is_dir() for f in p.rglob("*") if f.suffix.lower() in EXT)
+    return {"ok": True,
             "voz": {"ativa": _motor_seguro(), "motores": narracao.disponiveis(),
                     "elevenlabs": {"modelo": narracao.ELEVENLABS_MODELO, "saldo": narracao.saldo_elevenlabs() if narracao.ELEVENLABS_API_KEY else None}},
+            "alinhamento": "da voz (ElevenLabs/Google) > " + ("whisper" if transcricao.disponivel() else "energia"),
+            "sons": {"efeitos_na_pasta": contar(BIBLIOTECA / "sfx", SONS_REPO / "sfx"),
+                     "trilhas_na_pasta": contar(BIBLIOTECA / "trilha", SONS_REPO / "trilha"),
+                     "sem_arquivo": "efeito sintetizado; sem trilha"},
             "sons_biblioteca": _sfx_plano(),
-            "alinhamento": "whisperx" if alinhamento._whisperx() else "energia (ou ElevenLabs, quando for a voz)",
-            "boca": "rhubarb" if shutil.which("rhubarb") else "envelope",
-            "sons": {"freesound": bool(FREESOUND_TOKEN), "stable_audio": gpu, "sintese": True},
-            "trilha": {"openverse": OPENVERSE_ATIVO, "ace_step": bool(ACE_STEP_CMD)},
-            "imagem": {"mapas": mapas.disponivel(), "vtracer": vt, "flux": gpu, "animated_drawings": bool(ANIMATED_DRAWINGS_CMD)},
+            "imagem": {"mapas": mapas.disponivel()},
             "lottie": {"destaque": camadas.lottie_da_biblioteca("destaque") is not None},
             "acabamento": {"motion_blur": MOTION_BLUR, "textura_papel": TEXTURA_PAPEL}}

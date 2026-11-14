@@ -3,7 +3,7 @@ faster-whisper (modelo small, int8, CPU): transcreve a narração com o tempo de
 
 Serve para duas coisas:
   1. alinhamento sem GPU: tempo real de cada palavra do texto original (legenda, punch-in, efeitos)
-  2. conferência da voz clonada: se o que foi falado não bate com o texto, a frase é gerada de novo
+  2. conferência: compara o que foi falado com o texto
 """
 from __future__ import annotations
 

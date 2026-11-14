@@ -28,8 +28,8 @@ def _mmss(t: float) -> str:
     return f"{int(t // 60):02d}:{t % 60:04.1f}"
 
 
-def conferir_creditos(cenas: list[dict], avisos: list[str]) -> dict:
-    motor = narracao.motor_atual()
+def conferir_creditos(cenas: list[dict], avisos: list[str], motor: str | None = None) -> dict:
+    motor = motor or narracao.motor_atual()
     if motor != "elevenlabs":
         return {"motor": motor}
     faltam = [c for c in cenas if c.get("narracao") and not narracao.em_cache(c["narracao"])]

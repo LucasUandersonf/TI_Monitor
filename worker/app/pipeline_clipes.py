@@ -2,7 +2,7 @@
 Edição de um EPISÓDIO EM CENAS: uma pasta com cena-01.mp4 … cena-NN.mp4 (já animadas, sem som)
 e um fichas.json com a narração, os destaques e a parte de cada cena.
 
-  fichas.json ─► narração de cada cena (sua voz clonada / Kokoro / ElevenLabs), conferida pelo Whisper
+  fichas.json ─► narração de cada cena (ElevenLabs / Google TTS / Kokoro)
      ─► tempo de cada palavra
      ─► cada vídeo é ajustado ao tempo da fala: acelera ou desacelera um pouco (0,8× a 1,35×)
         e, se ainda faltar, segura o último quadro

@@ -2,6 +2,11 @@
 
 Inventário do que a Fábrica Cult **usa hoje**, o que cada peça faz, se é obrigatória e **se foi testada de verdade** no desenvolvimento. As licenças vêm de conhecimento geral e não foram reconferidas; confirme antes de distribuir o código ou usar comercialmente.
 
+> **Simplificação (nov/2026):** saíram do worker a voz clonada (Qwen3-TTS, Chatterbox), Piper, Kokoro em PyTorch,
+> WhisperX, Rhubarb, gl-transitions, Freesound, Stable Audio Open, ACE-Step e Openverse. A voz agora é
+> **ElevenLabs → Google Cloud TTS → Kokoro ONNX**, e os sons vêm só da pasta `sons/` (ou do volume) com síntese
+> própria de reserva. As linhas abaixo sobre essas peças ficam como histórico.
+
 Legenda do teste: ✅ rodou de ponta a ponta · 🔌 código pronto, não testado ao vivo (rede bloqueada ou precisa de GPU/chave)
 
 ## 1. Voz (narração)

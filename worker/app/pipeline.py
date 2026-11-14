@@ -3,8 +3,8 @@ Edição completa de um artifact (ou de um artifact em várias partes):
 
   artifact(s) ─► extrair cenas, animações e marcadores
      ─► camadas pedidas pelo artifact (mapa Natural Earth, arte FLUX/vtracer, desenho AnimatedDrawings)
-     ─► narração (ElevenLabs | Chatterbox | Kokoro ONNX | Kokoro | Piper)
-     ─► tempo das palavras (ElevenLabs | WhisperX | energia) + boca (Rhubarb | envelope)
+     ─► narração por cena (ElevenLabs | Google TTS | Kokoro): a duração de cada cena vem da fala
+     ─► tempo das palavras (da própria voz | Whisper | energia) + boca (envelope)
      ─► plano de edição (duração, relógio, punch-in, tremor, Lottie, sons, transições)
      ─► render 16:9 quadro a quadro com motion blur ─► transições ─► mix (voz + SFX + trilha) ─► acabamento
      ─► longo_16x9.mp4 + .srt + descrição do YouTube (capítulos e créditos)
@@ -24,11 +24,12 @@ from .etapas import alinhamento, camadas, direcao, montagem, narracao, plano, qu
 
 PADRAO = {"shorts": True, "legenda_queimada_longo": False, "clima_trilha": "reflexivo", "trilha": True,
           "trilha_arquivo": None, "preset": "medium", "max_shorts": 3,
-          "roteiro": None, "narracao_vem_de": "auto", "titulo": None, "direcao": None}
+          "roteiro": None, "narracao_vem_de": "auto", "titulo": None, "direcao": None,
+          "voz": None}   # None = a voz do worker (TTS_MOTOR); ou "elevenlabs" | "google" | "kokoro_onnx" só neste vídeo
 
 
-def _fala(texto: str, arq: Path, tem_boca: bool, anterior: str = "", seguinte: str = "") -> dict:
-    f = narracao.falar(texto, arq, anterior=anterior, seguinte=seguinte)
+def _fala(texto: str, arq: Path, tem_boca: bool, anterior: str = "", seguinte: str = "", motor: str | None = None) -> dict:
+    f = narracao.falar(texto, arq, motor=motor, anterior=anterior, seguinte=seguinte)
     ws, metodo = alinhamento.palavras(arq, texto, f["duracao"], f.pop("palavras_tts", None))
     f.update(palavras=ws, alinhamento=metodo)
     if tem_boca:
@@ -38,6 +39,9 @@ def _fala(texto: str, arq: Path, tem_boca: bool, anterior: str = "", seguinte: s
 
 def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None, callback_url: str | None = None) -> dict:
     op = {**PADRAO, **(opcoes or {})}
+    voz = (op.get("voz") or "").strip() or None
+    if voz in ("auto", "padrao", "padrão"):
+        voz = None
     p = jobs.pasta(job_id)
     saida = p / "saida"
     saida.mkdir(exist_ok=True)
@@ -74,12 +78,12 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
 
         jobs.etapa(job_id, "narracao", "rodando")
         (p / "audio").mkdir(exist_ok=True)
-        creditos_voz = qualidade.conferir_creditos(cenas, avisos)   # para ANTES de gastar, se não der para terminar
+        creditos_voz = qualidade.conferir_creditos(cenas, avisos, voz)   # para ANTES de gastar, se não der para terminar
         falas = []
         for k, c in enumerate(cenas):
             ant = cenas[k - 1]["narracao"] if k > 0 else ""
             seg = cenas[k + 1]["narracao"] if k + 1 < len(cenas) else ""
-            falas.append(_fala(c["narracao"], p / "audio" / f"cena_{k:03d}.wav", c.get("tem_boca", False), ant, seg))
+            falas.append(_fala(c["narracao"], p / "audio" / f"cena_{k:03d}.wav", c.get("tem_boca", False), ant, seg, voz))
             jobs.etapa(job_id, "narracao", "rodando", feitas=len(falas), total=len(cenas))
         creditos_voz["gastos"] = round(sum(f.get("caracteres", 0) for f in falas) * narracao.custo_por_caractere())
         creditos_voz["cenas_do_cache"] = sum(1 for f in falas if f.get("do_cache"))
@@ -88,7 +92,7 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
                    alinhamento=falas[0]["alinhamento"] if falas else None,
                    boca=next((f.get("boca_metodo") for f in falas if f.get("boca_metodo")), None))
         if falas and falas[0]["motor"] == "estimado":
-            avisos.append("nenhuma voz disponível: narração em silêncio (configure Kokoro, ElevenLabs ou Chatterbox)")
+            avisos.append("nenhuma voz disponível: narração em silêncio (configure ElevenLabs ou Google TTS; a Kokoro vem no worker)")
 
         # ---------------- vídeo longo 16:9
         pl = plano.montar(cenas, falas)
@@ -130,7 +134,7 @@ def editar(job_id: str, artifact: Path | list[Path], opcoes: dict | None = None,
                 if s.get("gancho_falado"):
                     c0 = sub_cenas[0]
                     sub_falas[0] = _fala(f"{s['gancho_falado']} {c0['narracao']}", ps / "audio" / "abertura.wav",
-                                         c0.get("tem_boca", False))
+                                         c0.get("tem_boca", False), motor=voz)
                 pls = plano.montar(sub_cenas, sub_falas, curto=True)
                 jobs.gravar(job_id, pls, f"short_{k}/plano.json")
                 clips_s = render.renderizar(arts, pls, ps / "clips", op["preset"])

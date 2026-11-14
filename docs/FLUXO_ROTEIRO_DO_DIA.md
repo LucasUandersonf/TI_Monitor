@@ -49,11 +49,13 @@ Se não achar, o fluxo para com uma mensagem dizendo o que procurou e o que tem 
    | `narracao_vem_de` | `auto`, `roteiro` ou `artifact` |
    | `gerar_shorts` | `sim` ou `nao` (`sim` precisa da chave da Anthropic no worker, a não ser que o artifact traga `window.META.shorts`) |
    | `clima_trilha` | `reflexivo`, `misterio` ou `tensao` |
-   | `trilha_arquivo` | opcional: link de uma música sua |
+   | `trilha_arquivo` | opcional: link de uma música sua, ou o nome de um arquivo da pasta `sons/trilha/` |
+   | `voz` | vazio = a voz configurada no worker. Ou `google`, `elevenlabs`, `kokoro_onnx` só para este fluxo |
+   | `limite_minutos` | depois de quanto tempo esperando o worker o fluxo desiste com erro (padrão 120) |
    | `testar_com_a_data` | vazio = hoje. Para testar agora uma linha de outro dia, ponha a data dela: `2026-11-20` |
-   | `telegram_bot_token`, `telegram_chat_id` | opcionais: aviso com os links quando ficar pronto |
+   | `telegram_chat_id` | opcional: aviso com os links quando ficar pronto |
 
-3. Escolha a credencial do Google Drive nos nós **Baixar planilha**, **Arquivos da pasta**, **Baixar artifact** e **Salvar no Drive**.
+3. Escolha a credencial do Google Drive nos nós **Baixar planilha**, **Arquivos da pasta**, **Baixar artifact** e **Salvar no Drive**. Se for usar o aviso, escolha a credencial **Telegram API** (o token do @BotFather) no nó **Avisar no Telegram**.
 4. Clique em **Execute workflow** (botão do nó **▶ Testar agora**) para ver na hora. Quando estiver bom, ative o fluxo: ele roda sozinho todo dia às 6h13.
 
 Vários vídeos no mesmo dia entram numa fila no worker e saem um depois do outro. O fluxo confere o andamento a cada minuto e só entrega quando todos terminam. Se um falhar, os outros são entregues e o erro aparece no resumo.

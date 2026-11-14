@@ -2,42 +2,23 @@
 Sincronia com a fala.
 
 Tempo de cada palavra (usado na legenda, no punch-in e nos efeitos presos a palavras):
-  1. ElevenLabs   : quando a voz é da ElevenLabs, o tempo de cada letra já vem junto
-  2. WhisperX     : alinhamento forçado com o texto conhecido (preciso, ~20 ms)
-  3. energia      : sem WhisperX, encontra as pausas reais no áudio e as casa com a pontuação do texto
+  1. da voz   : ElevenLabs e Google devolvem o tempo de cada palavra junto com o áudio
+  2. Whisper  : faster-whisper (CPU) ouve a fala da Kokoro e casa com o texto
+  3. energia  : sem Whisper, encontra as pausas reais no áudio e as casa com a pontuação do texto
 
-Boca (formas A..H e X):
-  1. Rhubarb Lip Sync (reconhecedor fonético, funciona em português)
-  2. envelope da voz: volume e brilho do som a cada 1/30 s viram formas de boca
+Boca (formas A..H e X): envelope da voz (volume e brilho do som a cada 1/30 s viram formas de boca)
 """
 from __future__ import annotations
 
-import json
 import re
-import subprocess
-from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-from ..config import RHUBARB_BIN
-
 
 def _norm(w: str) -> str:
     return re.sub(r"[^\wÀ-ú]", "", w.lower())
-
-
-@lru_cache(maxsize=1)
-def _whisperx():
-    try:
-        import torch
-        import whisperx
-        dev = "cuda" if torch.cuda.is_available() else "cpu"
-        modelo, meta = whisperx.load_align_model(language_code="pt", device=dev)
-        return whisperx, modelo, meta, dev
-    except Exception:
-        return None
 
 
 def _envelope(audio: Path, passo: float = 0.01) -> tuple[np.ndarray, float]:
@@ -58,7 +39,7 @@ def _pesos(ws: list[str]) -> list[float]:
 
 
 def estimar(texto: str, dur: float, audio: Path | None = None) -> list[dict]:
-    """Sem WhisperX: usa as pausas reais do áudio (silêncios) e a pontuação para distribuir as palavras."""
+    """Sem Whisper: usa as pausas reais do áudio (silêncios) e a pontuação para distribuir as palavras."""
     ws = texto.split()
     if not ws:
         return []
@@ -118,19 +99,6 @@ def palavras(audio: Path, texto: str, dur: float, prontas: list[dict] | None = N
     originais = texto.split()
     if prontas and len(prontas) == len(originais):
         return [{"w": o, "ini": p["ini"], "fim": p["fim"]} for o, p in zip(originais, prontas)], "da_voz"
-    wx = _whisperx()
-    if wx is not None:
-        whisperx, modelo, meta, dev = wx
-        a = whisperx.load_audio(str(audio))
-        res = whisperx.align([{"text": texto, "start": 0.0, "end": len(a) / 16000}], modelo, meta, a, dev,
-                             return_char_alignments=False)
-        ws = [w for w in res.get("word_segments", []) if "start" in w]
-        if ws:
-            out = []
-            for i, w in enumerate(ws):
-                igual = i < len(originais) and _norm(originais[i]) == _norm(w["word"])
-                out.append({"w": originais[i] if igual else w["word"], "ini": round(w["start"], 3), "fim": round(w["end"], 3)})
-            return out, "whisperx"
     from . import transcricao
     if transcricao.disponivel():
         try:
@@ -140,18 +108,6 @@ def palavras(audio: Path, texto: str, dur: float, prontas: list[dict] | None = N
         except Exception:
             pass
     return estimar(texto, dur, audio), "energia"
-
-
-def _boca_rhubarb(audio: Path, texto: str) -> list[list] | None:
-    try:
-        dialogo = audio.with_suffix(".txt")
-        dialogo.write_text(texto, encoding="utf-8")
-        saida = audio.with_suffix(".boca.json")
-        subprocess.run([RHUBARB_BIN, "-r", "phonetic", "-f", "json", "-d", str(dialogo), "-o", str(saida), str(audio)],
-                       check=True, capture_output=True, timeout=300)
-        return [[c["start"], c["end"], c["value"]] for c in json.loads(saida.read_text())["mouthCues"]]
-    except Exception:
-        return None
 
 
 def _boca_envelope(audio: Path, fps: int = 30) -> list[list]:
@@ -196,9 +152,6 @@ def _boca_envelope(audio: Path, fps: int = 30) -> list[list]:
 
 
 def boca(audio: Path, texto: str) -> tuple[list[list] | None, str]:
-    r = _boca_rhubarb(audio, texto)
-    if r:
-        return r, "rhubarb"
     return _boca_envelope(audio), "envelope"
 
 

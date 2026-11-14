@@ -12,27 +12,13 @@ import httpx
 from ..config import MODELOS_VOZ as MODELOS
 
 CATALOGO = {
-    # Qwen3-TTS Base 0.6B: clonagem com 3 a 15 s de referência, Apache 2.0
-    "qwen3_tts_base": ("Qwen/Qwen3-TTS-12Hz-0.6B-Base", [
-        "config.json", "generation_config.json", "merges.txt", "model.safetensors", "preprocessor_config.json",
-        "tokenizer_config.json", "vocab.json", "speech_tokenizer/config.json", "speech_tokenizer/configuration.json",
-        "speech_tokenizer/model.safetensors", "speech_tokenizer/preprocessor_config.json"]),
-    # Qwen3-TTS Base 1.7B (melhor, pede GPU)
-    "qwen3_tts_base_1.7b": ("Qwen/Qwen3-TTS-12Hz-1.7B-Base", [
-        "config.json", "generation_config.json", "merges.txt", "model.safetensors", "preprocessor_config.json",
-        "tokenizer_config.json", "vocab.json", "speech_tokenizer/config.json", "speech_tokenizer/configuration.json",
-        "speech_tokenizer/model.safetensors", "speech_tokenizer/preprocessor_config.json"]),
-    # Chatterbox Multilingual (23 idiomas, inclui português), MIT
-    "chatterbox_mtl": ("ResembleAI/chatterbox", [
-        "ve.pt", "t3_mtl23ls_v2.safetensors", "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "conds.pt",
-        "Cangjie5_TC.json"]),
     # faster-whisper small (CTranslate2): tempo de cada palavra e conferência da voz, em CPU
     "whisper_small": ("Systran/faster-whisper-small", ["config.json", "model.bin", "tokenizer.json", "vocabulary.txt"]),
 }
 
 
 def pasta(nome: str) -> Path:
-    return MODELOS / ("voz" if nome.startswith(("qwen3", "chatterbox")) else "") / nome
+    return MODELOS / nome
 
 
 def presente(nome: str) -> bool:

@@ -1,14 +1,11 @@
 """
-Narração: uma faixa por cena, com o texto exato do artifact.
+Narração: uma faixa por cena, com o texto exato do artifact. A duração da cena vem desta faixa.
 
-Motores (TTS_MOTOR=auto escolhe o primeiro disponível, nesta ordem):
-  elevenlabs  : voz premium paga (ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID)
-  clone       : SUA voz clonada, grátis e local (biblioteca/voz/referencia.wav), com o motor de
-                VOZ_CLONE_MOTOR: qwen3 (Qwen3-TTS, Apache 2.0) ou chatterbox (Chatterbox Multilingual, MIT).
-                Cada frase é conferida pelo Whisper e refeita se sair errada (ver voz_clonada.py)
-  kokoro_onnx : Kokoro-82M ONNX quantizado, CPU, vozes pt-BR pm_alex / pm_santa / pf_dora
-  kokoro      : Kokoro em PyTorch (mesmas vozes)
-  piper       : Piper TTS local (PIPER_MODEL)
+Motores (TTS_MOTOR=auto escolhe o primeiro configurado, nesta ordem):
+  elevenlabs  : voz premium (ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID); o tempo de cada letra vem junto
+  google      : Google Cloud TTS (GOOGLE_TTS_API_KEY); cota grátis mensal generosa; o tempo de cada
+                palavra vem junto (marcas SSML), então a sincronia é tão exata quanto a da ElevenLabs
+  kokoro_onnx : Kokoro-82M local, grátis, CPU, vozes pt-BR pm_alex / pm_santa / pf_dora
   estimado    : silêncio com a duração estimada, só para teste
 """
 from __future__ import annotations
@@ -25,12 +22,12 @@ import numpy as np
 import soundfile as sf
 
 from ..config import (DADOS, ELEVENLABS_API_KEY, ELEVENLABS_ESTABILIDADE, ELEVENLABS_MODELO, ELEVENLABS_VELOCIDADE,
-                      ELEVENLABS_VOICE_ID, KOKORO_VELOCIDADE, KOKORO_VOZ, MODELOS, PIPER_BIN, PIPER_MODEL, TTS_MOTOR,
-                      VOZ_CLONE_MOTOR)
-from . import texto_fala, voz_clonada
+                      ELEVENLABS_VOICE_ID, GOOGLE_TTS_API_KEY, GOOGLE_TTS_TOM, GOOGLE_TTS_VELOCIDADE, GOOGLE_TTS_VOZ,
+                      KOKORO_VELOCIDADE, KOKORO_VOZ, MODELOS, TTS_MOTOR)
+from . import texto_fala
 
 SR = 48000
-ORDEM = ["elevenlabs", "clone", "kokoro_onnx", "kokoro", "piper", "estimado"]
+ORDEM = ["elevenlabs", "google", "kokoro_onnx", "estimado"]
 
 
 def _carregar(nome: str):
@@ -38,24 +35,16 @@ def _carregar(nome: str):
         if not (ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID):
             raise RuntimeError("sem chave")
         return True
-    if nome == "clone":
-        ok, motivo = voz_clonada.disponivel(VOZ_CLONE_MOTOR)
-        if not ok:
-            raise RuntimeError(motivo)
-        return VOZ_CLONE_MOTOR
+    if nome == "google":
+        if not GOOGLE_TTS_API_KEY:
+            raise RuntimeError("sem chave")
+        return True
     if nome == "kokoro_onnx":
         from kokoro_onnx import Kokoro
         modelo, vozes = MODELOS / "kokoro" / "model_quantized.onnx", MODELOS / "kokoro" / "voices_ptbr.bin"
         if not modelo.exists():
             raise RuntimeError("modelo Kokoro não baixado (rode docker/baixar_modelos.sh)")
         return Kokoro(str(modelo), str(vozes))
-    if nome == "kokoro":
-        from kokoro import KPipeline
-        return KPipeline(lang_code="p")
-    if nome == "piper":
-        if not PIPER_MODEL or not Path(PIPER_MODEL).exists():
-            raise RuntimeError("sem PIPER_MODEL")
-        return PIPER_MODEL
     return None
 
 
@@ -74,8 +63,8 @@ def _motor():
         try:
             return TTS_MOTOR, _obter(TTS_MOTOR)
         except Exception as e:
-            msg = ("configure ELEVENLABS_API_KEY e ELEVENLABS_VOICE_ID nas variáveis do worker no Railway"
-                   if TTS_MOTOR == "elevenlabs" else str(e))
+            msg = {"elevenlabs": "configure ELEVENLABS_API_KEY e ELEVENLABS_VOICE_ID nas variáveis do worker no Railway",
+                   "google": "configure GOOGLE_TTS_API_KEY nas variáveis do worker no Railway"}.get(TTS_MOTOR, str(e))
             raise RuntimeError(f"voz {TTS_MOTOR} indisponível: {msg}")
     for nome in ORDEM:
         try:
@@ -229,31 +218,85 @@ def _elevenlabs(texto: str, anterior: str = "", seguinte: str = "") -> tuple[np.
     return audio, palavras, False
 
 
-def falar(texto: str, saida: Path, semente: int = 7, motor: str | None = None,
+GOOGLE = "https://texttospeech.googleapis.com/v1beta1/text:synthesize"
+
+
+def _ssml_com_marcas(texto: str) -> tuple[str, list[str]]:
+    """Uma marca antes de cada palavra: o Google devolve o instante em que cada uma começa."""
+    esc = lambda w: w.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    ws = texto.split()
+    corpo = " ".join(f'<mark name="{i}"/>{esc(w)}' for i, w in enumerate(ws))
+    return f'<speak>{corpo}<mark name="fim"/></speak>', ws
+
+
+def _google(texto: str) -> tuple[np.ndarray, list[dict], bool]:
+    """Fala uma cena pelo Google Cloud TTS, com o tempo de cada palavra. Guarda em cache (refazer não gasta cota)."""
+    import time
+    import httpx
+    CACHE_TTS.mkdir(parents=True, exist_ok=True)
+    chave = hashlib.sha256(json.dumps(["google", texto, GOOGLE_TTS_VOZ, GOOGLE_TTS_VELOCIDADE, GOOGLE_TTS_TOM],
+                                      ensure_ascii=False).encode()).hexdigest()[:24]
+    meta, wav = CACHE_TTS / f"{chave}.json", CACHE_TTS / f"{chave}.wav"
+    if meta.exists() and wav.exists():
+        a, _ = sf.read(wav, dtype="float32")
+        return a, json.loads(meta.read_text(encoding="utf-8")), True
+    ssml, ws = _ssml_com_marcas(texto)
+    lingua = "-".join(GOOGLE_TTS_VOZ.split("-")[:2]) or "pt-BR"
+    corpo = {"input": {"ssml": ssml}, "voice": {"languageCode": lingua, "name": GOOGLE_TTS_VOZ},
+             "audioConfig": {"audioEncoding": "LINEAR16", "sampleRateHertz": SR, "speakingRate": GOOGLE_TTS_VELOCIDADE,
+                             "pitch": GOOGLE_TTS_TOM},
+             "enableTimePointing": ["SSML_MARK"]}
+    ultimo = ""
+    for tentativa in range(6):
+        try:
+            r = httpx.post(GOOGLE, params={"key": GOOGLE_TTS_API_KEY}, json=corpo, timeout=120)
+        except httpx.HTTPError as e:
+            ultimo = str(e)
+            time.sleep(2 * 2 ** tentativa)
+            continue
+        if r.status_code == 200:
+            break
+        txt = r.text[:400]
+        if r.status_code in (429, 500, 502, 503, 504):
+            ultimo = f"{r.status_code} {txt}"
+            time.sleep(min(60, 3 * 2 ** tentativa))
+            continue
+        if r.status_code in (401, 403):
+            raise RuntimeError("Google TTS recusou a chave: confira GOOGLE_TTS_API_KEY e se a API Cloud Text-to-Speech "
+                               f"está ativada no projeto ({txt})")
+        raise RuntimeError(f"Google TTS falhou ({r.status_code}): {txt}")
+    else:
+        raise RuntimeError(f"Google TTS indisponível depois de 6 tentativas: {ultimo[:300]}")
+    d = r.json()
+    audio = _decodificar(base64.b64decode(d["audioContent"]), "wav")
+    dur = len(audio) / SR
+    marcas = {t["markName"]: float(t["timeSeconds"]) for t in d.get("timepoints", [])}
+    palavras = []
+    if all(str(i) in marcas for i in range(len(ws))):   # vozes sem suporte a marcas: fica sem (o alinhamento estima)
+        for i, w in enumerate(ws):
+            ini = marcas[str(i)]
+            fim = marcas.get(str(i + 1), marcas.get("fim", dur))
+            palavras.append({"w": w, "ini": round(ini, 3), "fim": round(max(ini + 0.05, fim - 0.02), 3)})
+    sf.write(wav, audio, SR, subtype="PCM_24")
+    meta.write_text(json.dumps(palavras, ensure_ascii=False), encoding="utf-8")
+    return audio, palavras, False
+
+
+def falar(texto: str, saida: Path, motor: str | None = None,
           anterior: str = "", seguinte: str = "") -> dict:
     """motor: força um motor (ex.: 'kokoro_onnx'); sem ele, usa o escolhido por TTS_MOTOR / auto.
     anterior/seguinte: texto das cenas vizinhas (a ElevenLabs usa para a entonação não "recomeçar" a cada cena)."""
     nome, m = (motor, _obter(motor)) if motor else _motor()
     do_cache = False
-    if nome == "clone":
-        return voz_clonada.falar(texto, saida, m, semente)
     palavras = None
     original, texto = texto, texto_fala.preparar(texto)   # números por extenso e pronúncia
     if nome == "elevenlabs":
         audio, palavras, do_cache = _elevenlabs(texto, anterior, seguinte)
+    elif nome == "google":
+        audio, palavras, do_cache = _google(texto)
     elif nome == "kokoro_onnx":
         amostras, sr = m.create(texto, voice=KOKORO_VOZ, speed=KOKORO_VELOCIDADE, lang="pt-br")
         audio = _para_48k(amostras, sr)
-    elif nome == "kokoro":
-        partes = [np.asarray(a) for _, _, a in m(texto, voice=KOKORO_VOZ, speed=KOKORO_VELOCIDADE)]
-        audio = _para_48k(np.concatenate(partes), 24000)
-    elif nome == "piper":
-        tmp = saida.with_suffix(".piper.wav")
-        subprocess.run([PIPER_BIN, "--model", m, "--output_file", str(tmp)], input=texto.encode(), check=True,
-                       capture_output=True)
-        a, sr = sf.read(tmp, dtype="float32")
-        audio = _para_48k(a if a.ndim == 1 else a.mean(axis=1), sr)
-        tmp.unlink(missing_ok=True)
     else:
         audio = np.zeros(int(max(1.5, len(texto.split()) / 2.5) * SR), dtype=np.float32)
     corte = 0.0
@@ -265,21 +308,16 @@ def falar(texto: str, saida: Path, semente: int = 7, motor: str | None = None,
     if palavras:
         palavras = [{"w": w["w"], "ini": round(max(0, w["ini"] - corte), 3), "fim": round(max(0, w["fim"] - corte), 3)}
                     for w in palavras]
-        if texto != original:  # a ElevenLabs falou o texto preparado; a legenda usa o original
+        if texto != original:  # a voz falou o texto preparado; a legenda usa o original
             from . import transcricao
             palavras = transcricao.alinhar(original, palavras, len(audio) / SR)
     return {"arquivo": str(saida), "duracao": len(audio) / SR, "motor": nome, "palavras_tts": palavras,
-            "caracteres": len(texto) if nome == "elevenlabs" and not do_cache else 0, "do_cache": do_cache}
+            "caracteres": len(texto) if nome in ("elevenlabs", "google") and not do_cache else 0, "do_cache": do_cache}
 
 
 def disponiveis() -> dict:
     out = {}
-    for motor in ("qwen3", "chatterbox"):
-        ok, motivo = voz_clonada.disponivel(motor)
-        out[f"clone_{motor}"] = "ok" if ok else motivo
     for nome in ORDEM[:-1]:
-        if nome == "clone":
-            continue
         try:
             _carregar(nome)
             out[nome] = "ok"

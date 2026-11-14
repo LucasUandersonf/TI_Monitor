@@ -1,9 +1,6 @@
-# modelos que pedem GPU (imagem worker-gpu)
+# só para a imagem com GPU: arte FLUX.1 schnell quando o artifact pede (marcador data-arte)
 torch
-torchaudio
-chatterbox-tts    # voz multilíngue com clonagem (GPU)
-whisperx          # tempo exato de cada palavra
-diffusers         # Stable Audio Open (efeitos por texto) e FLUX.1 schnell (arte)
+diffusers
 transformers
 accelerate
 sentencepiece

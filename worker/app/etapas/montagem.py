@@ -16,14 +16,11 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import BIBLIOTECA, GL_TRANSITIONS_DIR, LUFS_ALVO, RESOLUCAO, TEXTURA_PAPEL, TRANSICAO_MOTOR
+from ..config import BIBLIOTECA, LUFS_ALVO, RESOLUCAO, TEXTURA_PAPEL
 from . import sons
 
 SR = 48000
 FONTES = "/usr/share/fonts/truetype/fabrica"
-GL = {"circleopen": "CrossZoom", "fade": "fade", "slideleft": "directionalwarp", "zoomin": "ZoomInCircles"}
-
-
 def _variar(x: np.ndarray, semente: str) -> np.ndarray:
     """Cada uso do mesmo efeito sai levemente diferente: tom ±4% e volume ±1,5 dB."""
     h = int(hashlib.md5(semente.encode()).hexdigest()[:8], 16)
@@ -138,11 +135,7 @@ def _xfade(clips: list[Path], cenas: list[dict], base: float, saida: Path, prese
         nome, d = ant["transicao"] or "fade", ant["cauda"] or 0.04
         off = round(cenas[k].get("v_inicio", cenas[k]["inicio"]) - base, 3)
         out = f"[v{k}]"
-        if TRANSICAO_MOTOR == "gltransition":
-            glsl = GL_TRANSITIONS_DIR / f"{GL.get(nome, nome)}.glsl"
-            partes.append(f"{atual}[{k}:v]gltransition=duration={d}:offset={off}:source={glsl}{out}")
-        else:
-            partes.append(f"{atual}[{k}:v]xfade=transition={nome}:duration={d}:offset={off}{out}")
+        partes.append(f"{atual}[{k}:v]xfade=transition={nome}:duration={d}:offset={off}{out}")
         atual = out
     ff(*entradas, "-filter_complex", ";".join(partes), "-map", atual, "-c:v", "libx264", "-preset", preset,
        "-crf", "16", "-pix_fmt", "yuv420p", str(saida))

@@ -35,7 +35,7 @@
       "parameters": {}
     },
     {
-      "id": "0234491b-dcca-55d8-9609-44275f0fb4e3",
+      "id": "57b3230c-1644-5fe3-b837-005aa645217a",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -98,18 +98,24 @@
             },
             {
               "id": "b84fdadb-e02e-538c-8324-ced1288dcf6a",
-              "name": "testar_com_a_data",
+              "name": "voz",
               "value": "",
               "type": "string"
             },
             {
               "id": "27f3d72b-2454-5f57-b59a-2985a7a3bf38",
-              "name": "telegram_bot_token",
-              "value": "",
+              "name": "limite_minutos",
+              "value": "120",
               "type": "string"
             },
             {
               "id": "f198373b-15b9-5036-bd70-71e3486fd476",
+              "name": "testar_com_a_data",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0234491b-dcca-55d8-9609-44275f0fb4e3",
               "name": "telegram_chat_id",
               "value": "",
               "type": "string"
@@ -118,11 +124,11 @@
         },
         "options": {}
       },
-      "notes": "PREENCHA: worker, ID da planilha e das pastas. narracao_vem_de: auto | roteiro | artifact. testar_com_a_data: deixe vazio (usa hoje) ou ponha 2026-11-20 para testar outra data.",
+      "notes": "PREENCHA: ID da planilha e das pastas. voz: vazio (a do worker) | google | elevenlabs | kokoro_onnx. narracao_vem_de: auto | roteiro | artifact. testar_com_a_data: vazio (hoje) ou 2026-11-20. Telegram: ponha o chat_id e escolha a credencial no último nó.",
       "notesInFlow": true
     },
     {
-      "id": "57b3230c-1644-5fe3-b837-005aa645217a",
+      "id": "2e2c513e-9cb8-5680-a9b7-74a873e92cba",
       "name": "Worker está no ar?",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -134,12 +140,15 @@
         "method": "GET",
         "url": "={{ $('Config').first().json.worker_url }}/saude",
         "options": {
-          "timeout": 30000
+          "timeout": 120000
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000
     },
     {
-      "id": "2e2c513e-9cb8-5680-a9b7-74a873e92cba",
+      "id": "f1203d51-345b-534a-988d-8e5e12a59982",
       "name": "Baixar planilha",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
@@ -166,7 +175,7 @@
       "notesInFlow": true
     },
     {
-      "id": "f1203d51-345b-534a-988d-8e5e12a59982",
+      "id": "0922405b-a3e7-5018-94ce-53d0a9fee244",
       "name": "Ler planilha",
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
@@ -183,7 +192,7 @@
       }
     },
     {
-      "id": "0922405b-a3e7-5018-94ce-53d0a9fee244",
+      "id": "e155f3d8-ba20-508b-ba67-d801d0f99f36",
       "name": "Linhas de hoje",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -197,7 +206,7 @@
       }
     },
     {
-      "id": "e155f3d8-ba20-508b-ba67-d801d0f99f36",
+      "id": "8de3d611-e1fe-5d74-8d36-bd860fb16753",
       "name": "Arquivos da pasta",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
@@ -209,6 +218,7 @@
         "resource": "fileFolder",
         "searchMethod": "query",
         "queryString": "trashed = false",
+        "returnAll": true,
         "filter": {
           "folderId": {
             "__rl": true,
@@ -228,7 +238,7 @@
       "alwaysOutputData": true
     },
     {
-      "id": "8de3d611-e1fe-5d74-8d36-bd860fb16753",
+      "id": "bf0503a9-b47c-5a11-aba0-878a86020daa",
       "name": "Casar roteiro com artifact",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -242,7 +252,7 @@
       }
     },
     {
-      "id": "bf0503a9-b47c-5a11-aba0-878a86020daa",
+      "id": "1549db26-f1fb-5e50-9d1f-372859b81a4a",
       "name": "Baixar artifact",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
@@ -261,7 +271,7 @@
       }
     },
     {
-      "id": "1549db26-f1fb-5e50-9d1f-372859b81a4a",
+      "id": "57303ab4-0b4a-5a60-9bd6-28f45f1b27d0",
       "name": "Montar pedido",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -271,11 +281,11 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const cfg = $('Config').first().json;\nconst linhas = $('Casar roteiro com artifact').all().map(i => i.json);\nconst saida = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const l = linhas[i];\n  saida.push({ json: {\n    nome: l.nome_video,\n    data: l.data,\n    roteiro: l.roteiro,\n    artifact_base64: buf.toString('base64'),\n    opcoes: {\n      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,\n      clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null,\n      narracao_vem_de: cfg.narracao_vem_de || 'auto',\n      direcao: l.direcao || null\n    }\n  } });\n}\nreturn saida;"
+        "jsCode": "const cfg = $('Config').first().json;\nconst linhas = $('Casar roteiro com artifact').all().map(i => i.json);\nconst saida = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const l = linhas[i];\n  saida.push({ json: {\n    nome: l.nome_video,\n    data: l.data,\n    roteiro: l.roteiro,\n    artifact_base64: buf.toString('base64'),\n    opcoes: {\n      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,\n      clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null,\n      narracao_vem_de: cfg.narracao_vem_de || 'auto',\n      voz: cfg.voz || null,\n      direcao: l.direcao || null\n    }\n  } });\n}\nreturn saida;"
       }
     },
     {
-      "id": "57303ab4-0b4a-5a60-9bd6-28f45f1b27d0",
+      "id": "6050a7bd-c2c7-5db9-a792-db9f4a984cd0",
       "name": "Enviar para edição",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -295,7 +305,7 @@
       }
     },
     {
-      "id": "6050a7bd-c2c7-5db9-a792-db9f4a984cd0",
+      "id": "0cb828c0-ff10-59e4-8781-69e642ebf90c",
       "name": "Guardar jobs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -309,7 +319,7 @@
       }
     },
     {
-      "id": "f41dbb45-f3a2-5ec3-aaa9-bcf3d75397e8",
+      "id": "8655e8ca-b12b-52d8-992a-054749b513fd",
       "name": "Esperar 1 min",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
@@ -322,10 +332,10 @@
         "amount": 60,
         "unit": "seconds"
       },
-      "webhookId": "0cb828c0-ff10-59e4-8781-69e642ebf90c"
+      "webhookId": "f41dbb45-f3a2-5ec3-aaa9-bcf3d75397e8"
     },
     {
-      "id": "8655e8ca-b12b-52d8-992a-054749b513fd",
+      "id": "770a0445-595d-595a-8e60-46f13c8b2cc2",
       "name": "Ver andamento",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -335,11 +345,11 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Pergunta ao worker como está cada edição (fica em laço até todas terminarem)\nconst cfg = $('Config').first().json;\nconst jobs = $('Guardar jobs').first().json.jobs;\nconst status = [];\nfor (const j of jobs) {\n  let e = {};\n  try { e = await this.helpers.httpRequest({ method: 'GET', url: `${cfg.worker_url}/jobs/${j.job_id}`, json: true, timeout: 30000 }); }\n  catch (err) { e = { atual: 'sem resposta', concluido: false }; }\n  const etapa = e.etapas?.[e.atual] || {};\n  status.push({ ...j, atual: e.atual, concluido: !!e.concluido, erro: e.atual === 'erro' ? (etapa.erro || 'falhou') : null,\n                progresso: etapa.total ? `${etapa.feitas}/${etapa.total}` : undefined });\n}\nreturn [{ json: { todos_terminaram: status.every(s => s.concluido), jobs: status } }];"
+        "jsCode": "// Pergunta ao worker como está cada edição (fica em laço até todas terminarem, com limite de tempo)\nconst cfg = $('Config').first().json;\nconst limite = Number(cfg.limite_minutos) || 120;          // cada volta espera 1 min\nif ($runIndex >= limite) {\n  throw new Error(`As edições passaram de ${limite} minutos sem terminar. Veja os logs do fabrica-worker no Railway ` +\n    `(jobs: ${$('Guardar jobs').first().json.jobs.map(j => j.job_id).join(', ')}).`);\n}\nconst jobs = $('Guardar jobs').first().json.jobs;\nconst status = [];\nfor (const j of jobs) {\n  let e = {};\n  try { e = await this.helpers.httpRequest({ method: 'GET', url: `${cfg.worker_url}/jobs/${j.job_id}`, json: true, timeout: 30000 }); }\n  catch (err) { e = { atual: 'sem resposta', concluido: false }; }   // worker reiniciando: tenta de novo na próxima volta\n  const etapa = e.etapas?.[e.atual] || {};\n  status.push({ ...j, atual: e.atual, concluido: !!e.concluido, erro: e.atual === 'erro' ? (etapa.erro || 'falhou') : null,\n                progresso: etapa.total ? `${etapa.feitas}/${etapa.total}` : undefined });\n}\nreturn [{ json: { todos_terminaram: status.every(s => s.concluido), voltas: $runIndex + 1, jobs: status } }];"
       }
     },
     {
-      "id": "98cbba8d-041a-5ca3-ae0a-58dd73cdc354",
+      "id": "baca722f-2b14-5829-b492-d05e7a1eb8d3",
       "name": "Todos terminaram?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -356,7 +366,7 @@
           },
           "conditions": [
             {
-              "id": "770a0445-595d-595a-8e60-46f13c8b2cc2",
+              "id": "98cbba8d-041a-5ca3-ae0a-58dd73cdc354",
               "leftValue": "={{ $json.todos_terminaram }}",
               "rightValue": "",
               "operator": {
@@ -372,7 +382,7 @@
       }
     },
     {
-      "id": "baca722f-2b14-5829-b492-d05e7a1eb8d3",
+      "id": "94821f0d-c234-5c7d-8a1a-76e8e609043e",
       "name": "Arquivos prontos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -386,7 +396,7 @@
       }
     },
     {
-      "id": "94821f0d-c234-5c7d-8a1a-76e8e609043e",
+      "id": "59c83002-8da9-562a-82e2-dbfd3e2bf171",
       "name": "Baixar do worker",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -409,7 +419,7 @@
       }
     },
     {
-      "id": "59c83002-8da9-562a-82e2-dbfd3e2bf171",
+      "id": "b7d0a5bc-d329-50f0-b04c-b006a925adbe",
       "name": "Salvar no Drive",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
@@ -434,7 +444,7 @@
       }
     },
     {
-      "id": "b7d0a5bc-d329-50f0-b04c-b006a925adbe",
+      "id": "703ee586-9786-5d63-b202-469b66ae1760",
       "name": "Resumo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -448,7 +458,7 @@
       }
     },
     {
-      "id": "cf68cee6-0722-58f0-9f38-1858c232a9a3",
+      "id": "173c1ea7-2aed-5e9d-8d49-b5ada944ec96",
       "name": "Tem Telegram?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -465,8 +475,8 @@
           },
           "conditions": [
             {
-              "id": "703ee586-9786-5d63-b202-469b66ae1760",
-              "leftValue": "={{ $('Config').first().json.telegram_bot_token }}",
+              "id": "cf68cee6-0722-58f0-9f38-1858c232a9a3",
+              "leftValue": "={{ $('Config').first().json.telegram_chat_id }}",
               "rightValue": "",
               "operator": {
                 "type": "string",
@@ -481,23 +491,22 @@
       }
     },
     {
-      "id": "173c1ea7-2aed-5e9d-8d49-b5ada944ec96",
+      "id": "9eaff3d2-4e6d-53db-b0d4-10846ff016c0",
       "name": "Avisar no Telegram",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         4400,
         -200
       ],
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
-        "options": {
-          "timeout": 30000
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: $json.texto }) }}"
+        "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
+        "text": "={{ $json.texto }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
       }
     }
   ],
