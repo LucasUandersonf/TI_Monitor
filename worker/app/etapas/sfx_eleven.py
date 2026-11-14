@@ -22,24 +22,24 @@ SR = 48000
 ESTILO = "modern YouTube documentary sound design, clean, crisp, high fidelity, no music, no voice"
 # categoria -> (descrição, duração em s, variações)
 PEDIDOS = {
-    "pop":                ("soft modern UI pop, bubbly and tight, satisfying", 0.5, 3),
-    "whoosh":             ("fast airy swoosh passing by, short and clean", 0.8, 3),
-    "whoosh_grave":       ("deep cinematic sub whoosh with low rumble tail", 1.4, 2),
-    "transicao":          ("short riser that ends in a crisp swoosh, scene transition", 1.2, 2),
-    "impacto":            ("punchy cinematic trailer hit, low boom with short tail", 1.6, 2),
+    "pop":                ("soft modern UI pop, bubbly and tight, satisfying", 0.5, 2),
+    "whoosh":             ("fast airy swoosh passing by, short and clean", 0.8, 2),
+    "whoosh_grave":       ("deep cinematic sub whoosh with low rumble tail", 1.4, 1),
+    "transicao":          ("short riser that ends in a crisp swoosh, scene transition", 1.2, 1),
+    "impacto":            ("punchy cinematic trailer hit, low boom with short tail", 1.6, 1),
     "baque":              ("soft heavy thud, muffled", 0.6, 1),
-    "risco_caneta":       ("quick felt marker scribble on paper", 0.8, 2),
+    "risco_caneta":       ("quick felt marker scribble on paper", 0.8, 1),
     "papel":              ("paper crumple and toss", 1.0, 1),
-    "tick":               ("subtle clean UI tick", 0.5, 2),
+    "tick":               ("subtle clean UI tick", 0.5, 1),
     "ding":               ("bright clean bell ding, single hit", 1.2, 1),
     "notificacao":        ("smartphone notification chime, two short notes", 0.9, 1),
     "moeda":              ("single coin drop on a table", 0.8, 1),
     "caixa_registradora": ("cash register cha-ching", 1.3, 1),
     "bip":                ("censor bleep, single 1 kHz tone", 0.6, 1),
-    "glitch":             ("short digital glitch stutter, data corruption", 0.6, 2),
-    "riser":              ("tension riser building up, ends abruptly", 2.0, 1),
+    "glitch":             ("short digital glitch stutter, data corruption", 0.6, 1),
+    "riser":              ("tension riser building up, ends abruptly", 1.8, 1),
     "digitar":            ("short burst of fast keyboard typing", 1.0, 1),
-    "drone":              ("dark low ambient drone, slow and evolving", 8.0, 1),
+    "drone":              ("dark low ambient drone, slow and evolving", 4.0, 1),
 }
 
 
