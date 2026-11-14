@@ -39,17 +39,21 @@ def eh_capitulo(c: dict) -> bool:
     return "capitulo" in txt or "capítulo" in txt
 
 
-def _sfx_da_cena(c: dict, ws: list[dict], respiro: float, relogio: float = 1.0) -> list[dict]:
+def _sfx_da_cena(c: dict, ws: list[dict], respiro: float, relogio: float = 1.0, cap: bool | None = None) -> list[dict]:
     lista = []
     for a in sorted(c.get("animacoes", []), key=lambda a: a["atraso"]):
         cat = SFX_DA_ANIMACAO.get(a["nome"])
         if not cat or (cat == "risco_caneta" and a["duracao"] > 1.3):
             continue
         lista.append({"tipo": cat, "em": round(a["atraso"] / relogio, 3), "origem": "animacao"})
-    if eh_capitulo(c):
+    if (cap if cap is not None else eh_capitulo(c)):
         lista.append({"tipo": "impacto", "em": round(0.3 / relogio, 3), "origem": "capitulo"})
-    # efeitos declarados no artifact: {"tipo": "...", "em": segundos | "palavra"}
-    for s in c.get("sfx") or []:
+    # efeito pedido em texto no artifact: 'bipe antes de "Com todo respeito"'
+    if isinstance(c.get("sfx"), str):
+        from .sfx_texto import do_texto
+        lista += do_texto(c["sfx"], ws, 0.0, respiro)
+    # efeitos declarados no artifact como lista: {"tipo": "...", "em": segundos | "palavra"}
+    for s in (c.get("sfx") if isinstance(c.get("sfx"), list) else []):
         em = s.get("em", 0)
         if isinstance(em, str) and not re.fullmatch(r"[\d.]+", em):
             m = alinhamento.momento(ws, em)
@@ -63,7 +67,7 @@ def _sfx_da_cena(c: dict, ws: list[dict], respiro: float, relogio: float = 1.0) 
         if filtrada and s["em"] - filtrada[-1]["em"] < REGRAS["sfx_intervalo_min"] and s["origem"] == "animacao":
             continue
         filtrada.append(s)
-    prioridade = {"artifact": 0, "capitulo": 1, "animacao": 2}
+    prioridade = {"artifact": 0, "ficha": 0, "capitulo": 1, "animacao": 2}
     if len(filtrada) > REGRAS["sfx_max_por_cena"]:
         filtrada = sorted(sorted(filtrada, key=lambda s: prioridade[s["origem"]])[:REGRAS["sfx_max_por_cena"]], key=lambda s: s["em"])
     return filtrada
@@ -79,8 +83,10 @@ def _titulo_capitulo(c: dict) -> str:
 def montar(cenas: list[dict], falas: list[dict], curto: bool = False) -> dict:
     """cenas: saída do --extrair; falas: [{arquivo, duracao, palavras, boca}] na mesma ordem."""
     out, t = [], 0.0
+    tem_partes = any(c.get("capitulo") for c in cenas)
     for k, (c, f) in enumerate(zip(cenas, falas)):
-        cap = eh_capitulo(c)
+        # com partes no artifact (SECTIONS), capítulo = troca de parte; sem elas, cartão de capítulo pelo molde
+        cap = (k == 0 or c.get("capitulo") != cenas[k - 1].get("capitulo")) if tem_partes else eh_capitulo(c)
         respiro = REGRAS["respiro_capitulo"] if cap and not curto else REGRAS["respiro"]
         fim_anim = max([a["atraso"] + a["duracao"] for a in c.get("animacoes", [])] + [0])
         dur = round(max(respiro + f["duracao"] + REGRAS["pausa"], fim_anim + REGRAS["folga_animacao"], 2.0), 3)
@@ -119,17 +125,18 @@ def montar(cenas: list[dict], falas: list[dict], curto: bool = False) -> dict:
         elif curto:
             trans = REGRAS["transicao_short"]
         else:
-            trans = REGRAS["transicao_capitulo"] if eh_capitulo(prox) else REGRAS["transicao_cena"]
+            prox_cap = (prox.get("capitulo") != c.get("capitulo")) if tem_partes else eh_capitulo(prox)
+            trans = REGRAS["transicao_capitulo"] if prox_cap else REGRAS["transicao_cena"]
 
         out.append({
             "indice": c["indice"], "global": k, "parte": c.get("parte", 0), "inicio": round(t, 3), "dur": dur, "cauda": trans[1],
             "transicao": trans[0], "capitulo": cap,
             "fala": {"arquivo": f["arquivo"], "em": respiro, "duracao": f["duracao"]},
             "palavras": ws, "destaques": c.get("destaques") or [],
-            "movimento": movimento, "sfx": _sfx_da_cena(c, ws, respiro, relogio), "relogio": relogio,
+            "movimento": movimento, "sfx": _sfx_da_cena(c, ws, respiro, relogio, cap and not curto and k > 0), "relogio": relogio,
             "boca": [[a + respiro, b + respiro, v] for a, b, v in f["boca"]] if f.get("boca") else None,
             "camadas": c.get("camadas") or [], "lottie": lotties,
-            "titulo_capitulo": _titulo_capitulo(c) if cap else None,
+            "titulo_capitulo": ((c.get("capitulo") if tem_partes else None) or _titulo_capitulo(c)) if cap else None,
         })
         t += dur
     return {"duracao": round(t, 3), "cenas": out}

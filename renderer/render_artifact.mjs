@@ -59,7 +59,14 @@ await page.addStyleTag({ content: `
 // 3) adaptador
 await page.evaluate((palco) => {
   const temMotor = !!window.MOTOR_RENDER;
-  const lista = () => temMotor ? window.MOTOR_RENDER.cenas() : (typeof SCENES !== 'undefined' ? SCENES : window.CENAS);
+  // aceita os dois formatos do Motor de Cenas: SCENES (antigo) ou SECTIONS achatado em SC (novo)
+  const lista = () => temMotor ? window.MOTOR_RENDER.cenas()
+    : (typeof SCENES !== 'undefined' ? SCENES : (typeof SC !== 'undefined' ? SC : window.CENAS));
+  const parteDe = (s) => {
+    if (s.capitulo ?? s.chapter ?? s.parte) return s.capitulo ?? s.chapter ?? s.parte;
+    try { if (typeof SECTIONS !== 'undefined' && s.sec != null) return SECTIONS[s.sec].name; } catch (e) {}
+    return null;
+  };
   const raiz = () => document.querySelector(palco);
   const svg = () => raiz().querySelector('svg');
   const NS = 'http://www.w3.org/2000/svg';
@@ -107,9 +114,9 @@ await page.evaluate((palco) => {
   window.__FAB = {
     cenas() {
       return lista().map((s, i) => ({
-        indice: i, narracao: s.narration ?? s.narracao ?? s.texto ?? '', dur: s.dur ?? s.duracao ?? 7,
-        destaques: s.hot ?? s.destaques ?? [], molde: s.mold ?? s.molde ?? null, layout: s.layout ?? null,
-        capitulo: s.capitulo ?? s.chapter ?? null, sfx: s.sfx ?? null, camera: s.camera ?? null,
+        indice: i, narracao: s.narration ?? s.narracao ?? s.n ?? s.texto ?? '', dur: s.dur ?? s.duracao ?? 7,
+        destaques: s.hot ?? s.destaques ?? [], molde: s.mold ?? s.molde ?? s.m ?? null, layout: s.layout ?? null,
+        capitulo: parteDe(s), sfx: s.sfx ?? s.efeito_sonoro ?? null, camera: s.camera ?? null,
         mapa: s.mapa ?? null, arte: s.arte ?? null, desenho: s.desenho ?? null, lottie: s.lottie ?? null }));
     },
     marcadores() {
@@ -156,7 +163,13 @@ await page.evaluate((palco) => {
         if (tm.iterations !== Infinity && ms >= ini && ini > ultimoIni && a.effect.target?.getBoundingClientRect) { ultimo = a.effect.target; ultimoIni = ini; }
       }
       if (temMotor) window.MOTOR_RENDER.seek(i, tt);
-      else { try { t = tt; } catch (e) {} const s = lista()[i]; if (s.tick) s.tick(tt, svg()); }
+      else {
+        try { t = tt; } catch (e) {}
+        const s = lista()[i];
+        // o player do artifact chama as animações calculadas em update(); o formato antigo usa s.tick(t, svg)
+        if (typeof update === 'function') { try { update(); } catch (e) {} }
+        else if (s.tick) s.tick(tt, svg());
+      }
       svg().style.transform = `translate(${mov.x.toFixed(2)}px,${mov.y.toFixed(2)}px) scale(${mov.s.toFixed(4)})`;
       if (boca) raiz().querySelectorAll('[data-boca]').forEach(p => p.setAttribute('d', BOCAS[boca] || BOCAS.X));
       for (const sq of sequencias) sq.img.setAttribute('href', sq.quadros[Math.floor(tt * sq.fps) % sq.quadros.length]);
