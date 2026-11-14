@@ -1,8 +1,0 @@
-{
- "fonte": "CC0 Music Captioned (Hugging Face: mrfakename/cc0-music-captioned)",
- "titulo": "A tense, dramatic orchestral piece with a sense of urgency and foreboding.",
- "licenca": "CC0 (declarada pela coletânea; parte vem do FreePD, domínio público)",
- "url": "https://huggingface.co/datasets/mrfakename/cc0-music-captioned",
- "origem": "data/train-00032-of-00591.parquet linha 11 (1583.wav)",
- "credito_obrigatorio": false
-}

@@ -5,12 +5,11 @@ faça commit e o Railway publica junto com o worker.
 
 ## O que já vem incluído (tudo CC0: uso comercial, sem crédito obrigatório)
 
+Sem música de fundo: o fluxo 03 manda os vídeos só com voz e efeitos (`trilha: false`).
+
 - **40 efeitos** em 16 categorias (`sfx/`), da biblioteca **SFXMint** (CC0, sons gerados com Stable Audio;
   coletânea em huggingface.co/datasets/flreey/sfxmint-cc0-sound-effects). Já aparados (começam no ataque,
   sem silêncio antes), com fade no fim e o mesmo pico de volume.
-- **4 trilhas instrumentais** (`trilha/reflexivo`, `trilha/misterio`, `trilha/tensao`), compostas por pessoas,
-  da coletânea **CC0 Music Captioned** (huggingface.co/datasets/mrfakename/cc0-music-captioned; parte vem do
-  FreePD, domínio público). Cortadas em até 3 min com fade; o worker repete em loop se o vídeo for maior.
 - Sem arquivo para `digitar` e `caixa_registradora`: esses dois são sintetizados.
 
 Cada arquivo tem um `.credito.json` ao lado com a origem. Como são CC0, não entram na descrição do vídeo.

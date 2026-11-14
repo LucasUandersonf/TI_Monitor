@@ -39,8 +39,6 @@ CAMPOS = [
     ("drive_pasta_prontos", "COLE_AQUI_O_ID_DA_PASTA_03_VIDEOS_PRONTOS"),
     ("narracao_vem_de", "auto"),
     ("gerar_shorts", "sim"),
-    ("clima_trilha", "reflexivo"),
-    ("trilha_arquivo", ""),
     ("voz", ""),
     ("limite_minutos", "120"),
     ("testar_com_a_data", ""),
@@ -125,8 +123,7 @@ for (let i = 0; i < $input.all().length; i++) {
     roteiro: l.roteiro,
     artifact_base64: buf.toString('base64'),
     opcoes: {
-      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,
-      clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null,
+      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: false,   // sem música de fundo: só voz e efeitos
       narracao_vem_de: cfg.narracao_vem_de || 'auto',
       voz: cfg.voz || null,
       direcao: l.direcao || null
