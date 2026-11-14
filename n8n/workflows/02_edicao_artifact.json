@@ -1,0 +1,744 @@
+{
+  "id": "fabEdicaoArtif01",
+  "name": "02 · Edição do artifact (Drive → vídeo longo + shorts)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "171a26e8-f4a9-43b0-b2d3-f1050388ee7d",
+      "name": "Artifact novo no Drive",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.drive_pasta_artifacts }}"
+        },
+        "event": "fileCreated",
+        "options": {}
+      }
+    },
+    {
+      "id": "f471658d-09f0-41b5-ace9-45b487003351",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Preencha uma vez: URL do worker, Telegram e IDs das pastas do Drive.",
+      "notesInFlow": true,
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d96cbb8a-83c0-4d38-b475-832ac9c63a2f",
+              "name": "worker_url",
+              "value": "http://worker:8000",
+              "type": "string"
+            },
+            {
+              "id": "3276fc86-6ef1-44f7-b249-e316bf9cc34e",
+              "name": "telegram_bot_token",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "7570febe-c6a8-447b-bba4-d5944e5ea728",
+              "name": "telegram_chat_id",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "07eb05e2-aae2-4a01-b8fe-d4973cee7e41",
+              "name": "drive_pasta_roteiros",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "f9140021-a426-40cb-a273-375b3458f21c",
+              "name": "drive_pasta_artifacts",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "021946c1-5377-4e51-81a6-b8b45c3d87f9",
+              "name": "drive_pasta_prontos",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0accebf2-d8f1-4320-821c-b005f800a4d0",
+              "name": "trilha_arquivo",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "b4cc5125-1b21-4e8e-8d8f-652551e3087d",
+              "name": "clima_trilha",
+              "value": "reflexivo",
+              "type": "string"
+            },
+            {
+              "id": "4089fa82-a780-4e7d-a275-d744ae778f48",
+              "name": "publicar_youtube",
+              "value": "nao",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ed2428b6-920a-43f1-bbb6-450246eba1e2",
+      "name": "É .html?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "9cdf038f-d056-4492-98bb-0f46d4aa601e",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": ".html",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f0055723-ad41-41c4-91cb-15aaa1b5baa9",
+      "name": "Identificar partes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// \"Título · parte 2 de 3.html\" -> base \"Título\", parte 2, total 3. Sem \"parte\": vídeo de um arquivo só.\nconst vistos = new Set(), out = [];\nfor (const it of $input.all()) {\n  const nome = it.json.name.replace(/\\.html$/i, '');\n  const m = nome.match(/^(.*?)\\s*[·\\-–|]?\\s*parte\\s*(\\d+)\\s*de\\s*(\\d+)\\s*$/i);\n  const base = m ? m[1].trim() : nome;\n  if (vistos.has(base)) continue;\n  vistos.add(base);\n  out.push({ json: { base, total: m ? Number(m[3]) : 1 } });\n}\nreturn out;",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "44343702-e6ec-4d82-91fc-b24c663023fe",
+      "name": "Listar arquivos da pasta",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "name",
+        "queryString": "={{ $json.base }}",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config').first().json.drive_pasta_artifacts }}"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {
+          "fields": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "fba25242-904b-4b61-9da1-8e72d431cc46",
+      "name": "Todas as partes chegaram?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { base, total } = $('Identificar partes').first().json;\nconst esc = base.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\nconst re = total > 1 ? new RegExp('^' + esc + '\\\\s*[·\\\\-–|]?\\\\s*parte\\\\s*(\\\\d+)\\\\s*de\\\\s*' + total + '\\\\.html$', 'i')\n                     : new RegExp('^' + esc + '\\\\.html$', 'i');\nconst partes = $input.all().map(i => i.json).filter(f => f.name && re.test(f.name))\n  .map(f => ({ ...f, parte: total > 1 ? Number(f.name.match(re)[1]) : 1 }))\n  .sort((a, b) => a.parte - b.parte);\nconst unicas = [...new Map(partes.map(p => [p.parte, p])).values()];\nif (unicas.length < total) return [];          // ainda faltam partes: a próxima execução pega\nreturn unicas.map(p => ({ json: { id: p.id, name: p.name, parte: p.parte, base, total } }));",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "f75bd103-8e14-497f-b342-742f3e5685e8",
+      "name": "Baixar artifact",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "25c07863-0877-43d5-b17d-a62daa293e96",
+      "name": "Preparar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const partes = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  partes.push(buf.toString('base64'));\n}\nconst nome = $('Todas as partes chegaram?').first().json.base;\nreturn [{ json: {\n  nome,\n  artifacts_base64: partes,              // na ordem: parte 1, parte 2...\n  callback_url: $execution.resumeUrl,\n  opcoes: { shorts: true, max_shorts: 3, trilha: true, legenda_queimada_longo: false,\n    clima_trilha: $('Config').first().json.clima_trilha || 'reflexivo',\n    trilha_arquivo: $('Config').first().json.trilha_arquivo || null }\n} }];"
+      }
+    },
+    {
+      "id": "79fae07e-63e9-4299-80d0-0a441f0e16e5",
+      "name": "Worker: iniciar edição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/edicao",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      }
+    },
+    {
+      "id": "5107d13d-6886-4ce6-bb45-1a29f06efb43",
+      "name": "Telegram: começou",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: '🎞️ Editando <b>' + $('Preparar pedido').first().json.nome + '</b> (job ' + $json.job_id + ')' }) }}"
+      }
+    },
+    {
+      "id": "b42f30a1-aa69-4b28-8edb-a72db5a66996",
+      "name": "Esperar o worker",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "limitWaitTime": true,
+        "limitType": "afterTimeInterval",
+        "resumeAmount": 8,
+        "resumeUnit": "hours",
+        "options": {}
+      },
+      "webhookId": "3f067002-f783-4aa7-9a00-ca7d41e88328"
+    },
+    {
+      "id": "8589b2bf-b0cc-470f-b0e4-aa4c7fb4c962",
+      "name": "Deu erro?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "2ffe5d0b-cbef-4555-8350-12192e703aec",
+              "leftValue": "={{ $json.body.erro }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7808035c-8afa-4888-85cd-1af6f2612c4d",
+      "name": "Telegram: erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: '❌ Falhou: ' + $json.body.erro }) }}"
+      }
+    },
+    {
+      "id": "2927f605-cb15-4043-b9dd-c8178c25f168",
+      "name": "Buscar resultado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        80
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/jobs/{{ $json.body.job_id }}/resultado",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "dc158db3-63a8-4577-817c-07fb5ef53db2",
+      "name": "Um item por arquivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const r = $json;\nreturn r.arquivos.map(a => ({ json: { ...a, job_id: r.job_id, titulo_video: r.titulo } }));"
+      }
+    },
+    {
+      "id": "c79116e7-9648-43e9-8644-2f1004526df5",
+      "name": "Baixar arquivo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        80
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/arquivos/{{ $json.job_id }}/{{ $json.nome }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "b591c1ce-db2c-426c-a322-c035e3717657",
+      "name": "Subir no Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3300,
+        80
+      ],
+      "parameters": {
+        "name": "={{ $('Um item por arquivo').item.json.titulo_video }} · {{ $('Um item por arquivo').item.json.nome }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.drive_pasta_prontos }}"
+        },
+        "options": {},
+        "inputDataFieldName": "data"
+      }
+    },
+    {
+      "id": "950b12d5-1010-4196-9396-f364d6fa7294",
+      "name": "Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const itens = $('Um item por arquivo').all().map(i => i.json);\nconst links = $input.all().map(i => i.json.webViewLink);\nconst linhas = itens.map((a, k) => {\n  if (a.tipo === 'longo') return `🖥️ <a href=\"${links[k]}\">Vídeo longo 16:9</a>`;\n  if (a.tipo === 'short') return `📱 <a href=\"${links[k]}\">${a.titulo || a.nome}</a>\\n${a.legenda_post || ''}\\n${(a.hashtags || []).join(' ')}`;\n  return null;\n}).filter(Boolean);\nreturn [{ json: { texto: `✅ <b>${itens[0].titulo_video}</b> pronto\\n\\n` + linhas.join('\\n\\n') } }];",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "7d86d1fd-ce86-473a-88fa-fff499a418a8",
+      "name": "Telegram: pronto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3740,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: $json.texto }) }}"
+      }
+    },
+    {
+      "id": "c8972b0f-0b43-4b5c-8b99-6f0e6112af0c",
+      "name": "Publicar no YouTube?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "3ab23576-0f4c-41d5-9d5d-512ea800ce0f",
+              "leftValue": "={{ $('Um item por arquivo').item.json.tipo }}",
+              "rightValue": "longo",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "4c325342-7073-4b68-ba42-dc52b243ebe2",
+              "leftValue": "={{ $('Config').first().json.publicar_youtube }}",
+              "rightValue": "sim",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "092411d0-52dd-4b2e-aba5-bf607412bb52",
+      "name": "YouTube: enviar (privado)",
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        3520,
+        300
+      ],
+      "notes": "Sobe como PRIVADO. Revise e publique no YouTube Studio. Escolha a credencial YouTube OAuth2.",
+      "notesInFlow": true,
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('Buscar resultado').first().json.titulo }}",
+        "regionCode": "BR",
+        "categoryId": "27",
+        "binaryProperty": "data",
+        "options": {
+          "description": "={{ $('Buscar resultado').first().json.descricao_texto }}",
+          "privacyStatus": "private",
+          "defaultLanguage": "pt",
+          "selfDeclaredMadeForKids": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Artifact novo no Drive": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É .html?": {
+      "main": [
+        [
+          {
+            "node": "Identificar partes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Baixar artifact": {
+      "main": [
+        [
+          {
+            "node": "Preparar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar pedido": {
+      "main": [
+        [
+          {
+            "node": "Worker: iniciar edição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Worker: iniciar edição": {
+      "main": [
+        [
+          {
+            "node": "Telegram: começou",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: começou": {
+      "main": [
+        [
+          {
+            "node": "Esperar o worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar o worker": {
+      "main": [
+        [
+          {
+            "node": "Deu erro?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deu erro?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: erro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar resultado": {
+      "main": [
+        [
+          {
+            "node": "Um item por arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Um item por arquivo": {
+      "main": [
+        [
+          {
+            "node": "Baixar arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar arquivo": {
+      "main": [
+        [
+          {
+            "node": "Subir no Drive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Publicar no YouTube?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir no Drive": {
+      "main": [
+        [
+          {
+            "node": "Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumo": {
+      "main": [
+        [
+          {
+            "node": "Telegram: pronto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificar partes": {
+      "main": [
+        [
+          {
+            "node": "Listar arquivos da pasta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar arquivos da pasta": {
+      "main": [
+        [
+          {
+            "node": "Todas as partes chegaram?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todas as partes chegaram?": {
+      "main": [
+        [
+          {
+            "node": "Baixar artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "É .html?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar no YouTube?": {
+      "main": [
+        [
+          {
+            "node": "YouTube: enviar (privado)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {}
+}

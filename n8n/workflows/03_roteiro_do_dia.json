@@ -1,0 +1,751 @@
+{
+  "id": "fabRoteiroDoDia1",
+  "name": "03 · Roteiro do dia (planilha + artifact → vídeos prontos)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "8557c497-b513-54ca-8df6-b5a1504b4ecf",
+      "name": "Todo dia 6h13",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -120
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "13 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f6decd28-90c2-5d57-a300-3dd916a717c2",
+      "name": "▶ Testar agora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        120
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "0234491b-dcca-55d8-9609-44275f0fb4e3",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8996454d-4103-57a6-ae9d-c11fe337827a",
+              "name": "worker_url",
+              "value": "https://SEU-WORKER.up.railway.app",
+              "type": "string"
+            },
+            {
+              "id": "e94708ef-de87-5c0c-9ebf-9f3fddd76d74",
+              "name": "planilha_id",
+              "value": "COLE_AQUI_O_ID_DA_PLANILHA",
+              "type": "string"
+            },
+            {
+              "id": "b803df2d-e7b8-5bf3-b19b-e45fdb710d59",
+              "name": "drive_pasta_artifacts",
+              "value": "COLE_AQUI_O_ID_DA_PASTA_02_ARTIFACTS",
+              "type": "string"
+            },
+            {
+              "id": "3951e665-e4f5-5d83-b85f-57d0f8456718",
+              "name": "drive_pasta_prontos",
+              "value": "COLE_AQUI_O_ID_DA_PASTA_03_VIDEOS_PRONTOS",
+              "type": "string"
+            },
+            {
+              "id": "ed74a273-9a0c-518b-9514-ac0b183e42d1",
+              "name": "narracao_vem_de",
+              "value": "auto",
+              "type": "string"
+            },
+            {
+              "id": "fd8f81cf-cef9-5f61-84c2-47b327273941",
+              "name": "gerar_shorts",
+              "value": "sim",
+              "type": "string"
+            },
+            {
+              "id": "89ca92d3-fdc1-5cf1-9959-137741977d17",
+              "name": "clima_trilha",
+              "value": "reflexivo",
+              "type": "string"
+            },
+            {
+              "id": "f819ff91-76a6-5c34-94d7-a1a2d8b64ba1",
+              "name": "trilha_arquivo",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "b84fdadb-e02e-538c-8324-ced1288dcf6a",
+              "name": "testar_com_a_data",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "27f3d72b-2454-5f57-b59a-2985a7a3bf38",
+              "name": "telegram_bot_token",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "f198373b-15b9-5036-bd70-71e3486fd476",
+              "name": "telegram_chat_id",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "PREENCHA: worker, ID da planilha e das pastas. narracao_vem_de: auto | roteiro | artifact. testar_com_a_data: deixe vazio (usa hoje) ou ponha 2026-11-20 para testar outra data.",
+      "notesInFlow": true
+    },
+    {
+      "id": "57b3230c-1644-5fe3-b837-005aa645217a",
+      "name": "Worker está no ar?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/saude",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "2e2c513e-9cb8-5680-a9b7-74a873e92cba",
+      "name": "Baixar planilha",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.planilha_id }}"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "sheetsToFormat": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+          }
+        }
+      },
+      "notes": "Funciona com Excel (.xlsx) salvo no Drive ou com Planilha Google.",
+      "notesInFlow": true
+    },
+    {
+      "id": "f1203d51-345b-534a-988d-8e5e12a59982",
+      "name": "Ler planilha",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {
+          "headerRow": true
+        }
+      }
+    },
+    {
+      "id": "0922405b-a3e7-5018-94ce-53d0a9fee244",
+      "name": "Linhas de hoje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Lê a planilha: colunas \"roteiro\" e \"data\" (e, se quiser, \"artifact\" com o nome do arquivo).\n// A data pode vir como data do Excel, \"20/11/2026\", \"2026-11-20\" ou \"20-11-2026\".\nconst cfg = $('Config').first().json;\nconst hoje = (cfg.testar_com_a_data || '').trim() || $now.setZone('America/Sao_Paulo').toISODate();\n\nconst sem = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();\nfunction paraISO(v) {\n  if (v === null || v === undefined || v === '') return null;\n  if (typeof v === 'number') {                       // número de série do Excel (dias desde 1899-12-30)\n    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);\n    return d.toISOString().slice(0, 10);\n  }\n  if (v instanceof Date) return v.toISOString().slice(0, 10);\n  const s = String(v).trim();\n  let m = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);\n  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;\n  m = s.match(/^(\\d{1,2})[\\/\\-.](\\d{1,2})[\\/\\-.](\\d{2,4})/);  // dia/mês/ano (padrão brasileiro)\n  if (m) { const a = m[3].length === 2 ? '20' + m[3] : m[3]; return `${a}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }\n  if (/^\\d{5}(\\.\\d+)?$/.test(s)) return paraISO(Number(s));\n  return null;\n}\n\nconst saida = [];\n$input.all().forEach((item, k) => {\n  const linha = {};\n  for (const [chave, valor] of Object.entries(item.json)) linha[sem(chave)] = valor;\n  const roteiro = String(linha.roteiro ?? '').trim();\n  const data = paraISO(linha.data);\n  if (!roteiro || data !== hoje) return;\n  saida.push({ json: { linha: k + 2, data, roteiro, artifact: String(linha.artifact ?? linha.arquivo ?? '').trim() } });\n});\n// nenhuma linha com a data de hoje: o fluxo para aqui, sem erro\nreturn saida;"
+      }
+    },
+    {
+      "id": "e155f3d8-ba20-508b-ba67-d801d0f99f36",
+      "name": "Arquivos da pasta",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "name contains '.htm' and trashed = false",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config').first().json.drive_pasta_artifacts }}"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {
+          "fields": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "8de3d611-e1fe-5d74-8d36-bd860fb16753",
+      "name": "Casar roteiro com artifact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Para cada linha de hoje, acha o .html na pasta 02 · Artifacts:\n//   1. coluna \"artifact\" (nome do arquivo, ID ou link do Drive)\n//   2. senão, arquivo com a data no nome: 2026-11-20 ..., 20-11-2026 ..., 20.11.2026 ...\n//   3. senão, se só existe um .html na pasta, usa ele\nconst linhas = $('Linhas de hoje').all().map(i => i.json);\nconst arquivos = $input.all().map(i => i.json).filter(f => f.name && /\\.html?$/i.test(f.name));\nconst sem = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\nconst usados = new Set(), saida = [], faltando = [];\nfor (const l of linhas) {\n  let f = null;\n  if (l.artifact) {\n    const alvo = sem(l.artifact).replace(/\\.html?$/, '');\n    f = arquivos.find(a => sem(a.name).replace(/\\.html?$/, '') === alvo || l.artifact.includes(a.id));\n  }\n  if (!f) {\n    const [a, m, d] = l.data.split('-');\n    const formas = [`${a}-${m}-${d}`, `${d}-${m}-${a}`, `${d}.${m}.${a}`, `${d}_${m}_${a}`, `${a}${m}${d}`];\n    f = arquivos.find(x => !usados.has(x.id) && formas.some(fm => x.name.includes(fm)));\n  }\n  if (!f && arquivos.length === 1 && linhas.length === 1) f = arquivos[0];\n  if (!f) { faltando.push(`linha ${l.linha} (${l.data})`); continue; }\n  usados.add(f.id);\n  saida.push({ json: { ...l, id: f.id, arquivo: f.name, nome_video: f.name.replace(/\\.html?$/i, '') } });\n}\nif (!saida.length) {\n  throw new Error(`Tem roteiro para hoje (${faltando.join(', ')}), mas não achei o artifact na pasta 02 · Artifacts. ` +\n    `Ponha a data no nome do arquivo (ex.: ${linhas[0].data} meu video.html) ou preencha a coluna \"artifact\". ` +\n    `Arquivos na pasta: ${arquivos.map(a => a.name).join(', ') || 'nenhum .html'}`);\n}\nreturn saida;"
+      }
+    },
+    {
+      "id": "bf0503a9-b47c-5a11-aba0-878a86020daa",
+      "name": "Baixar artifact",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1549db26-f1fb-5e50-9d1f-372859b81a4a",
+      "name": "Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const cfg = $('Config').first().json;\nconst linhas = $('Casar roteiro com artifact').all().map(i => i.json);\nconst saida = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const l = linhas[i];\n  saida.push({ json: {\n    nome: l.nome_video,\n    data: l.data,\n    roteiro: l.roteiro,\n    artifact_base64: buf.toString('base64'),\n    opcoes: {\n      shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,\n      clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null,\n      narracao_vem_de: cfg.narracao_vem_de || 'auto'\n    }\n  } });\n}\nreturn saida;"
+      }
+    },
+    {
+      "id": "57303ab4-0b4a-5a60-9bd6-28f45f1b27d0",
+      "name": "Enviar para edição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/edicao",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      }
+    },
+    {
+      "id": "6050a7bd-c2c7-5db9-a792-db9f4a984cd0",
+      "name": "Guardar jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const linhas = $('Casar roteiro com artifact').all().map(i => i.json);\nreturn [{ json: { jobs: $input.all().map((i, k) => ({ job_id: i.json.job_id, nome: linhas[k].nome_video, data: linhas[k].data })), voltas: 0 } }];"
+      }
+    },
+    {
+      "id": "f41dbb45-f3a2-5ec3-aaa9-bcf3d75397e8",
+      "name": "Esperar 1 min",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        0
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "webhookId": "0cb828c0-ff10-59e4-8781-69e642ebf90c"
+    },
+    {
+      "id": "8655e8ca-b12b-52d8-992a-054749b513fd",
+      "name": "Ver andamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Pergunta ao worker como está cada edição (fica em laço até todas terminarem)\nconst cfg = $('Config').first().json;\nconst jobs = $('Guardar jobs').first().json.jobs;\nconst status = [];\nfor (const j of jobs) {\n  let e = {};\n  try { e = await this.helpers.httpRequest({ method: 'GET', url: `${cfg.worker_url}/jobs/${j.job_id}`, json: true, timeout: 30000 }); }\n  catch (err) { e = { atual: 'sem resposta', concluido: false }; }\n  const etapa = e.etapas?.[e.atual] || {};\n  status.push({ ...j, atual: e.atual, concluido: !!e.concluido, erro: e.atual === 'erro' ? (etapa.erro || 'falhou') : null,\n                progresso: etapa.total ? `${etapa.feitas}/${etapa.total}` : undefined });\n}\nreturn [{ json: { todos_terminaram: status.every(s => s.concluido), jobs: status } }];"
+      }
+    },
+    {
+      "id": "98cbba8d-041a-5ca3-ae0a-58dd73cdc354",
+      "name": "Todos terminaram?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "770a0445-595d-595a-8e60-46f13c8b2cc2",
+              "leftValue": "={{ $json.todos_terminaram }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "baca722f-2b14-5829-b492-d05e7a1eb8d3",
+      "name": "Arquivos prontos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        -100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Lista os arquivos prontos de cada edição que deu certo\nconst cfg = $('Config').first().json;\nconst st = $input.first().json.jobs;\nconst itens = [];\nfor (const j of st.filter(s => s.atual === 'concluido')) {\n  const r = await this.helpers.httpRequest({ method: 'GET', url: `${cfg.worker_url}/jobs/${j.job_id}/resultado`, json: true, timeout: 30000 });\n  for (const a of r.arquivos.filter(a => a.tipo !== 'metadados')) {\n    itens.push({ json: { ...a, job_id: j.job_id, titulo_video: r.titulo, data: j.data, avisos: r.avisos || [] } });\n  }\n}\nif (!itens.length) {\n  throw new Error('Nenhuma edição terminou bem: ' + st.map(s => `${s.nome}: ${s.erro || s.atual}`).join(' | '));\n}\nreturn itens;"
+      }
+    },
+    {
+      "id": "94821f0d-c234-5c7d-8a1a-76e8e609043e",
+      "name": "Baixar do worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3520,
+        -100
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/arquivos/{{ $json.job_id }}/{{ $json.nome }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "59c83002-8da9-562a-82e2-dbfd3e2bf171",
+      "name": "Salvar no Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3740,
+        -100
+      ],
+      "parameters": {
+        "name": "={{ $('Arquivos prontos').item.json.data }} · {{ $('Arquivos prontos').item.json.titulo_video }} · {{ $('Arquivos prontos').item.json.nome }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.drive_pasta_prontos }}"
+        },
+        "inputDataFieldName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "b7d0a5bc-d329-50f0-b04c-b006a925adbe",
+      "name": "Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3960,
+        -100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const itens = $('Arquivos prontos').all().map(i => i.json);\nconst links = $input.all().map(i => i.json.webViewLink);\nconst erros = $('Ver andamento').last().json.jobs.filter(j => j.erro).map(j => `${j.nome}: ${j.erro}`);\nconst porVideo = {};\nitens.forEach((a, k) => { (porVideo[a.titulo_video] ??= []).push({ tipo: a.tipo, nome: a.nome, link: links[k], titulo: a.titulo, legenda_post: a.legenda_post, hashtags: a.hashtags }); });\nconst linhas = [];\nfor (const [titulo, arqs] of Object.entries(porVideo)) {\n  linhas.push(`✅ <b>${titulo}</b>`);\n  for (const a of arqs) {\n    if (a.tipo === 'longo') linhas.push(`🖥️ <a href=\"${a.link}\">Vídeo longo 16:9</a>`);\n    else if (a.tipo === 'short') linhas.push(`📱 <a href=\"${a.link}\">${a.titulo || a.nome}</a>${a.legenda_post ? '\\n' + a.legenda_post : ''}${a.hashtags ? '\\n' + a.hashtags.join(' ') : ''}`);\n    else if (a.tipo === 'descricao') linhas.push(`📝 <a href=\"${a.link}\">Descrição do YouTube</a>`);\n    else if (a.tipo === 'legenda') linhas.push(`💬 <a href=\"${a.link}\">Legenda .srt</a>`);\n  }\n}\nif (erros.length) linhas.push('', '❌ ' + erros.join('\\n❌ '));\nreturn [{ json: { texto: linhas.join('\\n'), videos: porVideo, erros } }];"
+      }
+    },
+    {
+      "id": "cf68cee6-0722-58f0-9f38-1858c232a9a3",
+      "name": "Tem Telegram?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4180,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "703ee586-9786-5d63-b202-469b66ae1760",
+              "leftValue": "={{ $('Config').first().json.telegram_bot_token }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "173c1ea7-2aed-5e9d-8d49-b5ada944ec96",
+      "name": "Avisar no Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4400,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: $json.texto }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Todo dia 6h13": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶ Testar agora": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Worker está no ar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Worker está no ar?": {
+      "main": [
+        [
+          {
+            "node": "Baixar planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar planilha": {
+      "main": [
+        [
+          {
+            "node": "Ler planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler planilha": {
+      "main": [
+        [
+          {
+            "node": "Linhas de hoje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linhas de hoje": {
+      "main": [
+        [
+          {
+            "node": "Arquivos da pasta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arquivos da pasta": {
+      "main": [
+        [
+          {
+            "node": "Casar roteiro com artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Casar roteiro com artifact": {
+      "main": [
+        [
+          {
+            "node": "Baixar artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar artifact": {
+      "main": [
+        [
+          {
+            "node": "Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "Enviar para edição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar para edição": {
+      "main": [
+        [
+          {
+            "node": "Guardar jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar jobs": {
+      "main": [
+        [
+          {
+            "node": "Esperar 1 min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 1 min": {
+      "main": [
+        [
+          {
+            "node": "Ver andamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ver andamento": {
+      "main": [
+        [
+          {
+            "node": "Todos terminaram?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arquivos prontos": {
+      "main": [
+        [
+          {
+            "node": "Baixar do worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar do worker": {
+      "main": [
+        [
+          {
+            "node": "Salvar no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar no Drive": {
+      "main": [
+        [
+          {
+            "node": "Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumo": {
+      "main": [
+        [
+          {
+            "node": "Tem Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todos terminaram?": {
+      "main": [
+        [
+          {
+            "node": "Arquivos prontos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Esperar 1 min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Telegram?": {
+      "main": [
+        [
+          {
+            "node": "Avisar no Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {}
+}

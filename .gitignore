@@ -1,0 +1,10 @@
+.env
+dados/jobs/
+dados/biblioteca/_textura_papel_*
+node_modules/
+__pycache__/
+*.pyc
+*.zip
+modelos/
+exemplos/*.mp4
+exemplos/voz/

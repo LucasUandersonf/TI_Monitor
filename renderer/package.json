@@ -1,0 +1,10 @@
+{
+  "name": "fabrica-cult-renderer",
+  "private": true,
+  "type": "module",
+  "description": "Renderiza o Motor de Cenas quadro a quadro com Playwright + FFmpeg",
+  "dependencies": {
+    "playwright": "1.63.0",
+    "lottie-web": "5.12.2"
+  }
+}

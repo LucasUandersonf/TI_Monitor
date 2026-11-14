@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motor de Cenas Animadas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: player 16:9 no topo; DNA do canal; modelo da marca; roteiro em cenas; moldes + ficha */
+  --void:#0B0B0F; --panel:#15151C; --line:#262631; --text:#ECEAF2; --muted:#9592A6;
+  --magenta:#F0508C; --plum:#3A1C6B; --teal:#19B9C2; --cyan:#3FF3FF; --lime:#D7FF3A; --paper:#F4F1EA; --coral:#FF5A4E; --mint:#CFF3E8;
+  --display:"Bebas Neue", Impact, "Arial Narrow", sans-serif;
+  --label:"Barlow Condensed", "Arial Narrow", sans-serif;
+  --hand:"Permanent Marker", "Comic Sans MS", cursive;
+  --body:"Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--void);color:var(--text);font-family:var(--body)}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 64px;display:grid;gap:36px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 20px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(34px,4.4vw,52px);margin:0;letter-spacing:1px;line-height:1;text-wrap:balance}
+h1 span{color:var(--lime)}
+.meta{color:var(--muted);font-size:15px}
+h2{font-family:var(--label);font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--lime);margin:0 0 14px;font-weight:700}
+p.lead{margin:0 0 16px;max-width:68ch;color:#C9C6D6;line-height:1.55}
+
+/* PLAYER */
+.player{display:grid;gap:12px}
+.stage{position:relative;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.chip{position:absolute;top:3%;left:2.4%;z-index:3;font:700 clamp(9px,1.1vw,13px) var(--label);letter-spacing:.1em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.5);padding:.45em .8em;border-radius:99px}
+.subs{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:6% 9% 3%;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.72) 55%);
+  font:600 clamp(12px,2vw,27px)/1.35 var(--body);text-wrap:balance}
+.subs.off{display:none}
+.subs span{color:rgba(255,255,255,.3)}
+.subs span.on{color:#fff}
+.subs span.hot{color:var(--lime)}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);font:600 14px var(--body);height:40px;min-width:40px;padding:0 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--lime)}
+.btn:focus-visible,.seg:focus-visible,.card:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
+.btn.primary{background:var(--lime);color:#111;border-color:var(--lime)}
+.bar{flex:1;min-width:200px;display:flex;gap:4px;height:40px;align-items:center}
+.seg{flex:var(--w);height:8px;background:var(--line);border-radius:4px;position:relative;cursor:pointer;border:0;padding:0}
+.seg i{position:absolute;inset:0;width:0;background:var(--lime);border-radius:4px}
+.time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px;min-width:88px;text-align:right}
+
+/* DNA */
+.dna{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.trait{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.trait b{font:700 18px var(--label);letter-spacing:.03em;text-transform:uppercase}
+.trait p{margin:0;font-size:14px;line-height:1.5;color:#C3C0D0}
+.trait small{color:var(--muted);font-size:12px}
+
+/* MARCA */
+.brand{display:grid;grid-template-columns:1.1fr 1fr;gap:20px;align-items:start}
+.swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.sw{border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
+.sw i{display:block;height:54px}
+.sw span{display:block;padding:7px 9px;font-size:12px;line-height:1.35;color:#C3C0D0}
+.sw span b{display:block;color:var(--text);font-size:13px}
+.type{display:grid;gap:10px;margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.type div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.type small{color:var(--muted);font-size:12px}
+.rules{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rules li{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--lime);border-radius:8px;padding:10px 14px;font-size:14px;line-height:1.5;color:#C9C6D6}
+.rules li b{color:var(--text)}
+
+/* CENAS */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.card{text-align:left;font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;display:grid;gap:6px;align-content:start}
+.card:hover{border-color:#3d3d4c}
+.card.active{border-color:var(--lime);box-shadow:inset 3px 0 0 var(--lime)}
+.card .top{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.card .top b{color:var(--lime)}
+.card .lay{font:700 16px var(--label);letter-spacing:.04em;text-transform:uppercase}
+.card p{margin:0;font-size:14px;line-height:1.45;color:#C9C6D6}
+
+/* MOLDES */
+.engine{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.molds{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.molds li{display:flex;justify-content:space-between;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px}
+.molds li code{font:600 13px ui-monospace,Menlo,Consolas,monospace;color:var(--cyan)}
+.pill{font:700 11px var(--label);letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill.ok{background:var(--lime);color:#111}
+.pill.next{border:1px solid var(--line);color:var(--muted)}
+pre{margin:0;background:#07070A;border:1px solid var(--line);border-radius:10px;padding:16px;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#CFF3E8;overflow-x:auto;max-height:440px}
+
+@media (max-width:860px){.dna,.cards{grid-template-columns:1fr 1fr}.brand,.engine{grid-template-columns:1fr}}
+@media (max-width:480px){.dna,.cards{grid-template-columns:1fr}.swatches{grid-template-columns:repeat(2,1fr)}.time{display:none}}
+
+/* ANIMAÇÕES DO PALCO */
+.stage svg .draw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw var(--t,1.1s) cubic-bezier(.6,0,.3,1) forwards;animation-delay:var(--d,0s)}
+@keyframes draw{to{stroke-dashoffset:0}}
+.stage svg .pop{transform-box:fill-box;transform-origin:center;animation:pop .6s cubic-bezier(.34,1.56,.64,1) both;animation-delay:var(--d,0s)}
+@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.stage svg .fade{animation:fade .8s ease both;animation-delay:var(--d,0s)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.stage svg .rise{animation:rise .8s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+@keyframes rise{from{opacity:0;transform:translateY(50px)}to{opacity:1;transform:none}}
+.stage svg .slideL{animation:slideL 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+@keyframes slideL{from{opacity:0;transform:translateX(-120px)}to{opacity:1;transform:none}}
+.stage svg .slideR{animation:slideR 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+@keyframes slideR{from{opacity:0;transform:translateX(160px)}to{opacity:1;transform:none}}
+.stage svg .grow{transform-box:view-box;transform-origin:960px 470px;animation:grow 1.4s cubic-bezier(.2,.8,.2,1) both}
+@keyframes grow{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:scale(1)}}
+.stage svg .cam{transform-box:view-box;transform-origin:960px 520px;animation:cam var(--dur,7s) linear both}
+@keyframes cam{from{transform:scale(1)}to{transform:scale(1.07)}}
+.stage svg .pxSlow{animation:px var(--dur,7s) linear both;--px:-30px}
+.stage svg .pxFast{animation:px var(--dur,7s) linear both;--px:-90px}
+@keyframes px{from{transform:translateX(0)}to{transform:translateX(var(--px))}}
+.stage svg .float{animation:float var(--dur,8s) linear both;animation-delay:var(--d,0s)}
+@keyframes float{from{transform:translateY(0);opacity:0}12%{opacity:1}to{transform:translateY(-420px);opacity:.9}}
+.stage svg .blink{transform-box:fill-box;transform-origin:center;animation:blink 3.6s infinite}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+.stage svg .breathe{transform-box:fill-box;transform-origin:center bottom;animation:breathe 2.4s ease-in-out infinite alternate}
+@keyframes breathe{to{transform:scaleY(1.015)}}
+.stage svg .toss{transform-box:fill-box;transform-origin:center;animation:toss 1.2s cubic-bezier(.3,.6,.4,1) both;animation-delay:var(--d,0s)}
+@keyframes toss{to{transform:translate(170px,-60px) rotate(38deg);opacity:.25}}
+.stage svg .flick{animation:flick 1.8s ease-in-out infinite alternate}
+@keyframes flick{from{opacity:.55}to{opacity:1}}
+.stage.paused *{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){.stage svg *{animation-duration:.01s!important;animation-iteration-count:1!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Motor de Cenas <span>· Estilo Noturno</span></h1>
+    <div class="meta">Modelo da marca · 6 cenas de exemplo · 16:9 · 1920×1080</div>
+  </header>
+
+  <section class="player" aria-label="Player">
+    <div class="stage" id="stage">
+      <div class="chip" id="chip">Cena 1/6</div>
+      <svg id="svg" viewBox="0 0 1920 1080" role="img" aria-label="Cena animada"></svg>
+      <div class="subs" id="subs" aria-live="polite"></div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="prev" aria-label="Cena anterior">⏮</button>
+      <button class="btn primary" id="play" aria-label="Pausar">❚❚ Pausar</button>
+      <button class="btn" id="next" aria-label="Próxima cena">⏭</button>
+      <div class="bar" id="bar"></div>
+      <span class="time" id="time">0:00</span>
+      <button class="btn" id="cc" aria-pressed="true">Legenda</button>
+      <button class="btn" id="fs" aria-label="Tela cheia">⛶</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>O que o canal faz</h2>
+    <p class="lead">Analisei quadro a quadro "21 Mind Traps (Part II)", "The Psychology of Money in 20 minutes" e "Deep Work Systems in 15 minutes". O padrão se repete nos três.</p>
+    <div class="dna">
+      <div class="trait"><b>Fundo preto como palco</b><p>Quase tudo acontece sobre preto ou grafite com grade fina. A cor entra só nos elementos, então cada um salta da tela.</p><small>Psychology of Money 2:04, 11:07</small></div>
+      <div class="trait"><b>Janelas de tinta</b><p>Cenas inteiras aparecem dentro de manchas de borda rasgada, como tinta ou folhagem, recortadas no preto.</p><small>21 Mind Traps 1:15, 1:40, 3:00</small></div>
+      <div class="trait"><b>Personagens duotom</b><p>Ilustração vetorial chapada, cabeças grandes, pele em magenta ou teal com sombra de um tom só. Muitas silhuetas.</p><small>21 Mind Traps 5:00, 9:00</small></div>
+      <div class="trait"><b>Rótulos com seta à mão</b><p>Textos curtos em caixa alta condensada, sempre com uma seta curva desenhada apontando o elemento.</p><small>21 Mind Traps 4:20, 5:00, 13:20</small></div>
+      <div class="trait"><b>Cartão de capítulo</b><p>Cada ideia abre com um cartão estilo polaroide (título + subtítulo) e cada capítulo usa uma cor dominante.</p><small>21 Mind Traps 5:05 · Psychology of Money 16:33</small></div>
+      <div class="trait"><b>Dado em neon e recap</b><p>Gráficos com linha neon brilhante, equações em tipografia grande e um quadro final "Key Ideas" com marcadores.</p><small>Psychology of Money 7:30, 12:56 · Mind Traps 18:30</small></div>
+    </div>
+    <p class="lead" style="margin-top:14px">O ritmo: um plano dura de 6 a 15 segundos, mas nunca fica parado. A câmera aproxima devagar e os elementos entram um a um enquanto a narração avança. Não há legenda queimada na tela.</p>
+  </section>
+
+  <section class="brand">
+    <div>
+      <h2>Modelo da marca</h2>
+      <div class="swatches" id="swatches"></div>
+      <div class="type">
+        <div><span style="font:400 34px var(--display);letter-spacing:1px">TÍTULOS E NÚMEROS</span><small>Bebas Neue</small></div>
+        <div><span style="font:700 20px var(--label);letter-spacing:.08em;text-transform:uppercase">Rótulos com seta</span><small>Barlow Condensed</small></div>
+        <div><span style="font:22px var(--hand)">Eu sabia!</span><small>Permanent Marker · balões e anotações</small></div>
+      </div>
+    </div>
+    <div>
+      <h2>Regras de cena</h2>
+      <ul class="rules">
+        <li><b>Preto é o palco.</b> Fundo #0B0B0F com grade a 6% de opacidade. Fundo colorido só em cartão de capítulo.</li>
+        <li><b>Uma cor dominante por capítulo</b> (teal, magenta ou ameixa) e o lima reservado para destaque e "Ideias-chave".</li>
+        <li><b>Personagem fixo da marca:</b> "o Pensador", busto duotom de óculos redondos. É o nosso, não o do canal.</li>
+        <li><b>Rótulo = até 4 palavras</b>, caixa alta, sempre com seta curva.</li>
+        <li><b>Cena de 6 a 10 s</b>, câmera sempre em movimento (zoom 1,00→1,07 + paralaxe), sem corte seco no meio da frase.</li>
+        <li><b>Estrutura fixa:</b> cartão de capítulo → 3 a 6 cenas de explicação → "Ideias-chave".</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Roteiro de exemplo dividido em cenas</h2>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section class="engine">
+    <div>
+      <h2>Biblioteca de moldes</h2>
+      <ul class="molds" id="molds"></ul>
+    </div>
+    <div>
+      <h2>Ficha da cena atual</h2>
+      <pre id="spec"></pre>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ---------- utilidades ---------- */
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const ease=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function blob(cx,cy,rx,ry,seed,n=160){
+  const R=rng(seed),ph=[R()*6,R()*6,R()*6],pts=[];
+  for(let i=0;i<n;i++){const a=i/n*Math.PI*2;
+    let k=1+.07*Math.sin(3*a+ph[0])+.045*Math.sin(7*a+ph[1])+.03*Math.sin(15*a+ph[2]);
+    if(R()<.22)k+=(R()-.35)*.13;
+    pts.push((cx+rx*k*Math.cos(a)).toFixed(1)+','+(cy+ry*k*Math.sin(a)).toFixed(1));}
+  return 'M'+pts.join(' L')+'Z';
+}
+const DEFS=`<defs>
+  <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60,0 H0 V60" fill="none" stroke="#fff" stroke-opacity=".06" stroke-width="1.5"/></pattern>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="40"/></filter>
+</defs>`;
+
+/* o Pensador: personagem fixo da marca (busto duotom) */
+function pensador({x=0,y=0,s=1,skin='#F0508C',shade='#B8306E',hair='#2A1352',shirt='#CFF3E8',ink='#1A0F2E'}={}){
+  return `<g transform="translate(${x} ${y}) scale(${s})"><g class="breathe">
+    <path d="M-330,0 C-320,-150 -200,-215 -90,-228 L90,-228 C200,-215 320,-150 330,0 Z" fill="${shirt}"/>
+    <path d="M-90,-228 L0,-160 L90,-228 Z" fill="${shade}" opacity=".9"/>
+    <rect x="-58" y="-305" width="116" height="100" fill="${shade}"/>
+    <ellipse cx="-142" cy="-440" rx="24" ry="38" fill="${shade}"/>
+    <path d="M-140,-450 C-140,-560 -70,-612 0,-612 C80,-612 142,-560 142,-450 C142,-360 100,-290 0,-280 C-100,-290 -140,-360 -140,-450Z" fill="${skin}"/>
+    <path d="M40,-612 C110,-600 142,-550 142,-450 C142,-360 100,-290 0,-280 C60,-320 84,-400 74,-480 C68,-540 58,-582 40,-612Z" fill="${shade}" opacity=".75"/>
+    <path d="M-152,-468 C-166,-604 -60,-656 22,-646 C124,-638 166,-570 152,-478 C124,-540 64,-562 -8,-558 C-82,-552 -124,-522 -152,-468Z" fill="${hair}"/>
+    <g fill="${hair}"><rect x="-98" y="-512" width="78" height="14" rx="7"/><rect x="22" y="-512" width="78" height="14" rx="7"/></g>
+    <g class="blink"><circle cx="-56" cy="-456" r="8" fill="${ink}"/><circle cx="56" cy="-456" r="8" fill="${ink}"/></g>
+    <g fill="#fff" fill-opacity=".14" stroke="${ink}" stroke-width="9"><circle cx="-58" cy="-458" r="44"/><circle cx="58" cy="-458" r="44"/></g>
+    <path d="M-14,-462 Q0,-474 14,-462" stroke="${ink}" stroke-width="8" fill="none"/>
+    <path d="M6,-440 C24,-408 22,-392 -2,-388" stroke="${shade}" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M-38,-346 Q0,-330 38,-346" stroke="${ink}" stroke-width="8" fill="none" stroke-linecap="round"/>
+  </g></g>`;
+}
+function silhouette(x,y,s,fill='#121217'){
+  return `<g transform="translate(${x} ${y}) scale(${s})">
+    <circle cx="0" cy="-252" r="36" fill="${fill}"/>
+    <path d="M-62,-204 C-74,-120 -62,-60 -52,0 L52,0 C62,-60 74,-120 62,-204 C40,-220 -40,-220 -62,-204Z" fill="${fill}"/></g>`;
+}
+function polaroid({x,y,rot=-3,s=1,bg='#0E5560',title,sub,cls='pop',d=0}){
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})"><g class="${cls}" style="--d:${d}s">
+    <rect x="-242" y="-292" width="520" height="620" fill="#000" opacity=".28" rx="6"/>
+    <rect x="-260" y="-310" width="520" height="620" fill="#FBFAF6" rx="6"/>
+    <clipPath id="pc${x}"><rect x="-230" y="-280" width="460" height="420"/></clipPath>
+    <rect x="-230" y="-280" width="460" height="420" fill="${bg}"/>
+    <g clip-path="url(#pc${x})">
+      ${pensador({x:-20,y:150,s:.6,skin:'#7FDCE0',shade:'#3FA9B2',hair:'#0B3F47',shirt:'#F4F1EA',ink:'#062B30'})}
+      <g transform="translate(120 -110)" stroke="#fff" stroke-width="12" fill="none" stroke-linecap="round"><circle r="62" fill="#fff" fill-opacity=".16"/><line x1="44" y1="44" x2="100" y2="100"/></g>
+    </g>
+    <text x="-226" y="206" font-family="var(--display)" font-size="58" fill="#111" textLength="452" lengthAdjust="spacingAndGlyphs">${title}</text>
+    <text x="-226" y="246" font-family="var(--label)" font-weight="600" font-size="24" letter-spacing="1.5" fill="#555" ${sub.length>14?'textLength="452" lengthAdjust="spacingAndGlyphs"':''}>${sub}</text>
+  </g></g>`;
+}
+const arrow=(d,color='#fff',dl=0)=>`<path class="draw" pathLength="1" style="--d:${dl}s;--t:.7s" d="${d}" stroke="${color}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+const head=(x,y,ang,color='#fff',dl=0)=>`<g transform="translate(${x} ${y}) rotate(${ang})"><path class="fade" style="--d:${dl}s" d="M-22,-14 L0,0 L-22,14" stroke="${color}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+const label=(x,y,t,color='#fff',dl=0,size=34,anchor='start')=>`<text class="fade" style="--d:${dl}s" x="${x}" y="${y}" text-anchor="${anchor}" font-family="var(--label)" font-weight="700" font-size="${size}" letter-spacing="2" fill="${color}">${t}</text>`;
+
+/* ---------- cenas ---------- */
+const SCENES=[
+{
+  mold:'cartao_capitulo', layout:'Cartão de capítulo', dur:7, camera:'zoom lento + paralaxe das barras',
+  narration:'Erro de pensamento número um: o viés de confirmação.', hot:['confirmação.'],
+  elements:['fundo teal (cor do capítulo)','barras translúcidas em paralaxe','cartão polaroide com o Pensador e lupa','título + subtítulo do cartão','etiqueta "ERRO Nº 01"'],
+  bg:'#19B9C2',
+  render(){
+    const R=rng(7);let bars='';for(let i=0;i<14;i++){const w=60+R()*120,h=200+R()*500,x=i*150+R()*40;bars+=`<rect x="${x}" y="${540-h/2}" width="${w}" height="${h}" fill="#fff" opacity="${(.05+R()*.07).toFixed(2)}"/>`;}
+    return `${DEFS}<rect width="1920" height="1080" fill="#19B9C2"/>
+      <g class="pxFast">${bars}</g>
+      <g class="cam">
+        ${polaroid({x:960,y:500,title:'VIÉS DE CONFIRMAÇÃO',sub:'BUSCAR SÓ O QUE JÁ ACREDITAMOS',d:.3})}
+        <text class="slideL" style="--d:1.2s" x="200" y="220" font-family="var(--hand)" font-size="58" fill="#062B30">ERRO Nº 01</text>
+        ${arrow('M330,250 C360,330 470,360 650,330','#062B30',1.7)}${head(650,330,-8,'#062B30',2.3)}
+      </g>`;
+  }
+},
+{
+  mold:'janela_tinta', layout:'Janela de tinta', dur:8, camera:'janela cresce + paralaxe em 3 camadas',
+  narration:'Imagine que você já decidiu que um investimento é ótimo. A partir daí, toda notícia parece concordar com você.', hot:['toda','notícia'],
+  elements:['fundo preto','mancha de tinta recortando a cena','céu ao entardecer, sol, cidade e colinas','silhueta pequena no penhasco','notícias subindo com ✓','cabeça em silhueta no primeiro plano','rótulo "SÓ ENXERGA O QUE CONFIRMA"'],
+  render(){
+    const R=rng(21);let city='';for(let i=0;i<34;i++){const w=30+R()*60,h=60+R()*220,x=880+i*32+R()*10;city+=`<rect x="${x}" y="${700-h}" width="${w}" height="${h}" fill="#3A1C4F"/>`;}
+    let news='';for(let i=0;i<6;i++){const x=1000+R()*560,y=820+R()*80;news+=`<g class="float" style="--d:${(.6+i*.7).toFixed(1)}s"><g transform="translate(${x.toFixed(0)} ${y.toFixed(0)}) rotate(${(R()*16-8).toFixed(1)})">
+      <rect x="-60" y="-40" width="120" height="80" rx="4" fill="#FBFAF6"/><rect x="-46" y="-26" width="70" height="9" fill="#999"/><rect x="-46" y="-8" width="92" height="6" fill="#ccc"/><rect x="-46" y="6" width="80" height="6" fill="#ccc"/>
+      <circle cx="54" cy="-36" r="22" fill="#D7FF3A"/><path d="M43,-36 L51,-28 L65,-44" stroke="#111" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></g>`;}
+    const B=blob(960,470,720,380,4);
+    return `${DEFS}<rect width="1920" height="1080" fill="#000"/>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B1235"/><stop offset=".55" stop-color="#6B2F7A"/><stop offset="1" stop-color="#FF7A59"/></linearGradient>
+      <clipPath id="win"><path d="${B}"/></clipPath>
+      <g class="cam"><g class="grow"><g clip-path="url(#win)">
+        <rect x="0" y="0" width="1920" height="1080" fill="url(#sky)"/>
+        <g class="pxSlow"><circle cx="1150" cy="600" r="110" fill="#FFD38A"/><circle cx="1150" cy="600" r="190" fill="#FFD38A" opacity=".15"/>${city}</g>
+        <path d="M0,700 C300,640 600,720 900,690 C1200,660 1500,720 1920,680 V1080 H0Z" fill="#24112F"/>
+        ${news}
+        <g class="pxFast"><path d="M120,1080 L160,760 C300,730 560,720 820,760 L860,1080Z" fill="#0B0614"/>${silhouette(720,762,.5,'#0B0614')}</g>
+        ${label(300,560,'SÓ ENXERGA O QUE CONFIRMA','#fff',3.2,30)}
+        ${arrow('M520,580 C560,640 620,660 680,640','#fff',3.6)}${head(680,640,-20,'#fff',4.2)}
+      </g></g>
+      <path class="slideR" style="--d:.6s" d="M1470,1080 C1450,900 1520,790 1640,770 C1780,752 1860,850 1850,960 C1846,1020 1866,1050 1890,1080Z" fill="#050507"/>
+      </g>`;
+  }
+},
+{
+  mold:'retrato_rotulos', layout:'Retrato + rótulos', dur:7, camera:'zoom lento no rosto',
+  narration:'Seu cérebro não está procurando a verdade. Está procurando conforto.', hot:['conforto.'],
+  elements:['quarto escuro com estante e janela em silhueta','o Pensador em magenta (busto grande)','balão de pensamento "EU SABIA!"','rótulo "VERDADE" riscado','rótulo "CONFORTO" com seta para a cabeça'],
+  render(){
+    const cloud=[[1240,330,92],[1350,276,112],[1462,332,96],[1350,388,100],[1182,388,62],[1516,394,62]];
+    return `${DEFS}<rect width="1920" height="1080" fill="#160F24"/>
+      <g class="pxSlow" opacity=".55">
+        <rect x="1180" y="120" width="560" height="380" fill="#22183A"/><rect x="1200" y="140" width="250" height="160" fill="#2E2250"/><rect x="1470" y="140" width="250" height="160" fill="#2E2250"/>
+        <rect x="80" y="620" width="1840" height="16" fill="#22183A"/>
+        ${[0,1,2,3,4,5].map(i=>`<rect x="${1200+i*90}" y="${560-(i%3)*30}" width="50" height="${60+(i%3)*30}" fill="#2E2250"/>`).join('')}
+      </g>
+      <g class="cam">
+        <g class="slideL" style="--d:.1s">${pensador({x:560,y:1090,s:1.25})}</g>
+        <g class="pop" style="--d:1.2s">
+          <circle cx="1000" cy="540" r="16" fill="#fff" stroke="#111" stroke-width="5"/><circle cx="1060" cy="480" r="26" fill="#fff" stroke="#111" stroke-width="5"/>
+          ${cloud.map(c=>`<circle cx="${c[0]}" cy="${c[1]}" r="${c[2]+6}" fill="#111"/>`).join('')}
+          ${cloud.map(c=>`<circle cx="${c[0]}" cy="${c[1]}" r="${c[2]}" fill="#fff"/>`).join('')}
+          <text x="1350" y="356" text-anchor="middle" font-family="var(--hand)" font-size="66" fill="#111">EU SABIA!</text>
+        </g>
+        <g class="fade" style="--d:2.4s"><rect x="1240" y="590" width="300" height="74" rx="37" fill="none" stroke="#8C88A0" stroke-width="4"/>
+          <text x="1390" y="642" text-anchor="middle" font-family="var(--label)" font-weight="700" font-size="40" letter-spacing="4" fill="#8C88A0">VERDADE</text></g>
+        <line class="draw" pathLength="1" style="--d:3.4s;--t:.5s" x1="1230" y1="640" x2="1550" y2="614" stroke="#FF5A4E" stroke-width="8" stroke-linecap="round"/>
+        <g class="pop" style="--d:4s"><rect x="1240" y="730" width="320" height="80" rx="40" fill="#F0508C"/>
+          <text x="1400" y="786" text-anchor="middle" font-family="var(--label)" font-weight="700" font-size="44" letter-spacing="4" fill="#fff">CONFORTO</text></g>
+        ${arrow('M1232,770 C1080,770 900,700 790,590','#fff',4.5)}${head(790,590,-135,'#fff',5.1)}
+      </g>`;
+  }
+},
+{
+  mold:'comparacao_ab', layout:'Comparação A/B', dur:8, camera:'fixa, entradas pelos lados',
+  narration:'Quando a prova concorda, aceitamos na hora. Quando discorda, caçamos um defeito.', hot:['defeito.'],
+  elements:['fundo grafite com grade','rótulo central "A PROVA…"','setas curvas verde e vermelha','chips CONCORDA (rosto feliz) e DISCORDA (rosto bravo)','silhueta com brilho lima aceitando o papel ✓','silhueta jogando fora o papel ✗'],
+  render(){
+    return `${DEFS}<rect width="1920" height="1080" fill="#1A1A21"/><rect width="1920" height="1080" fill="url(#grid)"/>
+      <line class="fade" style="--d:.2s" x1="960" y1="200" x2="960" y2="920" stroke="#fff" stroke-opacity=".15" stroke-width="3" stroke-dasharray="10 14"/>
+      ${label(960,110,'A PROVA…','#fff',.1,40,'middle')}
+      ${arrow('M900,130 C760,140 640,160 600,200','#D7FF3A',.5)}${head(600,200,120,'#D7FF3A',1.1)}
+      ${arrow('M1020,130 C1160,140 1280,160 1320,200','#FF5A4E',.5)}${head(1320,200,60,'#FF5A4E',1.1)}
+      <g class="pop" style="--d:.9s"><rect x="420" y="214" width="280" height="76" fill="#3A1C6B"/><text x="560" y="270" text-anchor="middle" font-family="var(--display)" font-size="54" fill="#fff">CONCORDA</text>
+        <circle cx="560" cy="330" r="30" fill="#D7FF3A"/><circle cx="549" cy="322" r="4" fill="#111"/><circle cx="571" cy="322" r="4" fill="#111"/><path d="M546,338 Q560,350 574,338" stroke="#111" stroke-width="4" fill="none" stroke-linecap="round"/></g>
+      <g class="pop" style="--d:1.1s"><rect x="1220" y="214" width="280" height="76" fill="#3A1C6B"/><text x="1360" y="270" text-anchor="middle" font-family="var(--display)" font-size="54" fill="#fff">DISCORDA</text>
+        <circle cx="1360" cy="330" r="30" fill="#FF5A4E"/><circle cx="1349" cy="324" r="4" fill="#111"/><circle cx="1371" cy="324" r="4" fill="#111"/><path d="M1346,346 Q1360,334 1374,346" stroke="#111" stroke-width="4" fill="none" stroke-linecap="round"/></g>
+      <g class="slideL" style="--d:1.6s">
+        <ellipse class="flick" cx="560" cy="720" rx="150" ry="230" fill="#D7FF3A" opacity=".45" filter="url(#soft)"/>
+        ${silhouette(560,900,1.35,'#0E0E12')}
+        <g transform="translate(650 640) rotate(-8)"><rect x="-44" y="-56" width="88" height="112" fill="#FBFAF6"/><path d="M-20,0 L-4,16 L24,-16" stroke="#3A9B2A" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+      </g>
+      <g class="slideR" style="--d:2.2s">
+        ${silhouette(1360,900,1.35,'#0E0E12')}
+        <g transform="translate(1440 640) rotate(10)"><g class="toss" style="--d:4.2s"><rect x="-44" y="-56" width="88" height="112" fill="#FBFAF6"/><path d="M-18,-18 L18,18 M18,-18 L-18,18" stroke="#FF5A4E" stroke-width="9" stroke-linecap="round"/></g></g>
+      </g>
+      ${label(560,450,'ACEITA NA HORA','#D7FF3A',2.6,52,'middle')}
+      ${label(1360,450,'CAÇA UM DEFEITO','#FF5A4E',4.4,52,'middle')}`;
+  }
+},
+{
+  mold:'grafico_neon', layout:'Gráfico neon', dur:8, camera:'fixa, linhas desenhadas pela narração',
+  narration:'Quanto mais você busca o que confirma, mais confiante fica, mesmo sem estar mais certo.', hot:['confiante','certo.'],
+  elements:['fundo preto com grade','eixos finos','curva CONFIANÇA em ciano neon (sobe)','curva ACERTO em magenta neon (quase reta)','anotação "mais certeza ≠ mais razão"','selo "ilustrativo"'],
+  render(){
+    return `${DEFS}<rect width="1920" height="1080" fill="#050507"/><rect width="1920" height="1080" fill="url(#grid)"/>
+      <text class="rise" style="--d:.1s" x="240" y="170" font-family="var(--hand)" font-size="60" fill="#fff">mais certeza ≠ mais razão</text>
+      <path class="draw" pathLength="1" style="--d:.3s" d="M240,220 V860 H1500" stroke="#fff" stroke-opacity=".7" stroke-width="4" fill="none"/>
+      ${label(240,900,'BUSCAS QUE SÓ CONFIRMAM →','#9592A6',.6,28)}
+      <path id="conf" d="" stroke="#3FF3FF" stroke-width="9" fill="none" stroke-linecap="round" filter="url(#glow)"/>
+      <path id="acer" d="" stroke="#F0508C" stroke-width="9" fill="none" stroke-linecap="round" filter="url(#glow)"/>
+      <circle id="cdot" r="13" fill="#3FF3FF" filter="url(#glow)"/><circle id="adot" r="13" fill="#F0508C" filter="url(#glow)"/>
+      <text id="clab" font-family="var(--label)" font-weight="700" font-size="40" letter-spacing="3" fill="#3FF3FF" opacity="0">CONFIANÇA</text>
+      <text id="alab" font-family="var(--label)" font-weight="700" font-size="40" letter-spacing="3" fill="#F0508C" opacity="0">ACERTO</text>
+      ${label(1800,820,'ILUSTRATIVO','#5E5B6E',1,22,'end')}`;
+  },
+  tick(t,root){
+    const p=ease(clamp((t-.9)/4.6)),X=q=>240+q*1260;
+    let c='',a='';
+    for(let i=0;i<=60;i++){const q=i/60*p;const cy=840-Math.pow(q,1.7)*590, ay=840-(.24+.035*Math.sin(q*14))*590;
+      c+=(i?' L':'M')+X(q).toFixed(1)+','+cy.toFixed(1); a+=(i?' L':'M')+X(q).toFixed(1)+','+ay.toFixed(1);}
+    root.querySelector('#conf').setAttribute('d',c); root.querySelector('#acer').setAttribute('d',a);
+    const ex=X(p), cy=840-Math.pow(p,1.7)*590, ay=840-(.24+.035*Math.sin(p*14))*590;
+    const cd=root.querySelector('#cdot'),ad=root.querySelector('#adot');cd.setAttribute('cx',ex);cd.setAttribute('cy',cy);ad.setAttribute('cx',ex);ad.setAttribute('cy',ay);
+    const cl=root.querySelector('#clab'),al=root.querySelector('#alab'),o=String(clamp((t-1.2)/.6));
+    cl.setAttribute('x',ex+30);cl.setAttribute('y',cy+12);cl.setAttribute('opacity',o);
+    al.setAttribute('x',ex+30);al.setAttribute('y',ay+12);al.setAttribute('opacity',o);
+  }
+},
+{
+  mold:'ideias_chave', layout:'Ideias-chave', dur:8, camera:'fixa, itens entram em sequência',
+  narration:'Para escapar, procure de propósito quem discorda de você.', hot:['discorda'],
+  elements:['fundo preto','título IDEIAS-CHAVE em lima neon','3 marcadores entrando um a um','cartão do capítulo repetido à direita','selo do canal'],
+  render(){
+    const items=['Procure de propósito quem discorda de você.','Antes de decidir: o que me provaria errado?','Desconfie da sensação de "eu sabia".'];
+    return `${DEFS}<rect width="1920" height="1080" fill="#050507"/>
+      <text class="fade" style="--d:.1s" x="190" y="250" font-family="var(--display)" font-size="130" letter-spacing="3" fill="#D7FF3A" filter="url(#glow)">IDEIAS-CHAVE</text>
+      ${items.map((it,i)=>`<g class="slideL" style="--d:${(1+i*1.4).toFixed(1)}s"><rect x="194" y="${372+i*120}" width="22" height="22" fill="#D7FF3A" transform="rotate(45 205 ${383+i*120})"/>
+        <text x="250" y="${396+i*120}" font-family="var(--body)" font-weight="600" font-size="46" fill="#fff">${it}</text></g>`).join('')}
+      ${polaroid({x:1560,y:480,rot:5,s:.62,title:'VIÉS DE CONFIRMAÇÃO',sub:'ERRO Nº 01',cls:'rise',d:.5})}
+      <g class="pop" style="--d:.8s"><circle cx="1790" cy="120" r="58" fill="#19B9C2"/>
+        <text x="1790" y="114" text-anchor="middle" font-family="var(--display)" font-size="30" fill="#fff">SEU</text><text x="1790" y="144" text-anchor="middle" font-family="var(--display)" font-size="30" fill="#fff">CANAL</text></g>`;
+  }
+},
+{
+  mold:'mapa', layout:'Mapa com rota', dur:7, camera:'zoom lento',
+  narration:'Em mil e quinhentos, uma frota portuguesa cruzou o Atlântico e chegou ao Brasil.', hot:['Brasil.'],
+  elements:['mapa Natural Earth pedido pelo marcador data-mapa','rota animada','rótulo'],
+  render(){
+    return `${DEFS}<rect width="1920" height="1080" fill="#0B0B0F"/><rect width="1920" height="1080" fill="url(#grid)"/>
+      <g class="cam"><rect class="fade" data-mapa="PRT,BRA" data-rota="PRT>BRA" x="120" y="60" width="1680" height="945" rx="18" fill="#15151C"/>
+      ${label(160,1040,'1500 · A ROTA DE CABRAL','#D7FF3A',2.2,40)}</g>`;
+  }
+},
+{
+  mold:'arte', layout:'Arte vetorizada', dur:7, camera:'zoom lento',
+  narration:'E toda grande viagem começa com alguém olhando para o horizonte e pensando: e se?', hot:['e','se?'],
+  elements:['imagem da biblioteca vetorizada pelo vtracer dentro de uma janela'],
+  render(){
+    return `${DEFS}<rect width="1920" height="1080" fill="#000"/>
+      <clipPath id="jan"><path d="${blob(960,520,800,430,9)}"/></clipPath>
+      <g class="grow"><g clip-path="url(#jan)"><rect data-arte-arquivo="horizonte.jpg" x="0" y="0" width="1920" height="1080" fill="#3A1C6B"/></g></g>
+      ${label(200,160,'E SE?','#fff',2.4,56)}`;
+  }
+}
+];
+
+const MOLDS=[
+ ['cartao_capitulo','Cartão de capítulo (polaroide)',true],['janela_tinta','Janela de tinta (cena recortada)',true],
+ ['retrato_rotulos','Retrato do Pensador + rótulos',true],['comparacao_ab','Comparação A/B com silhuetas',true],
+ ['grafico_neon','Gráfico em linha neon',true],['ideias_chave','Ideias-chave (recap)',true],
+ ['equacao','Equação em tipografia grande',false],['isometrico','Plataforma isométrica',false],
+ ['colagem_mapa','Colagem sobre mapa / jornal',false],['medidor','Medidor / escala de risco',false],
+ ['multidao','Multidão de silhuetas',false],['manchete_tv','Tarja de telejornal',false]
+];
+const SW=[['#0B0B0F','Palco','fundo de toda cena'],['#19B9C2','Teal','capítulo / cartão'],['#F0508C','Magenta','pele do Pensador'],['#3A1C6B','Ameixa','chips e sombras'],
+ ['#D7FF3A','Lima','destaque e recap'],['#3FF3FF','Ciano neon','linhas de dado'],['#FF5A4E','Coral','erro / negativo'],['#F4F1EA','Papel','cartões e notas']];
+
+/* ---------- player ---------- */
+const N=SCENES.length; let start=0; SCENES.forEach(s=>{s.start=start;start+=s.dur;}); const TOTAL=start;
+const $=id=>document.getElementById(id); const svg=$('svg'),stage=$('stage'),subs=$('subs');
+let cur=0,t=0,playing=true,last=null,words=[];
+const fmt=s=>{s=Math.floor(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+
+$('swatches').innerHTML=SW.map(s=>`<div class="sw"><i style="background:${s[0]}"></i><span><b>${s[1]}</b>${s[2]}</span></div>`).join('');
+$('molds').innerHTML=MOLDS.map(m=>`<li><span><code>${m[0]}</code> · ${m[1]}</span><span class="pill ${m[2]?'ok':'next'}">${m[2]?'pronto':'próximo'}</span></li>`).join('');
+$('bar').innerHTML=SCENES.map((s,i)=>`<button class="seg" style="--w:${s.dur}" data-i="${i}" aria-label="Ir para cena ${i+1}"><i></i></button>`).join('');
+$('cards').innerHTML=SCENES.map((s,i)=>`<button class="card" data-i="${i}"><span class="top"><b>Cena ${i+1}</b><span>${fmt(s.start)}–${fmt(s.start+s.dur)} · ${s.dur}s</span></span>
+  <span class="lay">${s.layout}</span><p>${s.narration}</p></button>`).join('');
+document.querySelectorAll('[data-i]').forEach(b=>b.addEventListener('click',()=>go(+b.dataset.i)));
+
+function go(i){
+  cur=(i+N)%N; t=0; const s=SCENES[cur];
+  svg.style.setProperty('--dur',s.dur+'s');
+  svg.innerHTML=s.render();
+  $('chip').textContent=`Cena ${cur+1}/${N} · ${s.layout}`;
+  const hot=new Set(s.hot||[]);
+  subs.innerHTML=s.narration.split(' ').map(w=>`<span class="${hot.has(w)?'h':''}">${w}</span>`).join(' ');
+  words=[...subs.querySelectorAll('span')];
+  document.querySelectorAll('.card').forEach((c,k)=>c.classList.toggle('active',k===cur));
+  $('spec').textContent=JSON.stringify({cena:cur+1,molde:s.mold,inicio:fmt(s.start),duracao_s:s.dur,camera:s.camera,narracao:s.narration,destaques:s.hot,elementos:s.elements,formato:'1920x1080 (16:9)'},null,2);
+  update();
+}
+function update(){
+  const s=SCENES[cur]; if(s.tick) s.tick(t,svg);
+  const k=Math.ceil(clamp((t-.3)/(s.dur-1.4))*words.length);
+  words.forEach((w,i)=>{const h=w.classList.contains('h');w.classList.toggle('on',i<k&&!h);w.classList.toggle('hot',i<k&&h);});
+  document.querySelectorAll('.seg i').forEach((el,i)=>{el.style.width=i<cur?'100%':i>cur?'0':(clamp(t/s.dur)*100)+'%';});
+  $('time').textContent=`${fmt(s.start+t)} / ${fmt(TOTAL)}`;
+}
+function setPlaying(v){playing=v;stage.classList.toggle('paused',!v);const b=$('play');b.innerHTML=v?'❚❚ Pausar':'▶ Tocar';b.setAttribute('aria-label',v?'Pausar':'Tocar');}
+function frame(ts){if(last===null)last=ts;const dt=Math.min(.1,(ts-last)/1000);last=ts;
+  if(playing){t+=dt;if(t>=SCENES[cur].dur)go(cur+1);else update();} requestAnimationFrame(frame);}
+$('play').onclick=()=>setPlaying(!playing);
+$('prev').onclick=()=>go(cur-1); $('next').onclick=()=>go(cur+1);
+$('cc').onclick=()=>{const off=subs.classList.toggle('off');$('cc').setAttribute('aria-pressed',String(!off));};
+$('fs').onclick=()=>{try{const p=stage.requestFullscreen?.();p&&p.catch(()=>{});}catch(e){}};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();setPlaying(!playing);}
+  if(e.key==='ArrowRight')go(cur+1);if(e.key==='ArrowLeft')go(cur-1);});
+go(0); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

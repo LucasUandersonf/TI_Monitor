@@ -1,0 +1,8 @@
+.git
+dados
+modelos
+exemplos
+*.zip
+**/node_modules
+**/__pycache__
+n8n/plugin/node_modules

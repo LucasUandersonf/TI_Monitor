@@ -1,0 +1,10 @@
+# modelos que pedem GPU (imagem worker-gpu)
+torch
+torchaudio
+chatterbox-tts    # voz multilíngue com clonagem (GPU)
+whisperx          # tempo exato de cada palavra
+diffusers         # Stable Audio Open (efeitos por texto) e FLUX.1 schnell (arte)
+transformers
+accelerate
+sentencepiece
+protobuf

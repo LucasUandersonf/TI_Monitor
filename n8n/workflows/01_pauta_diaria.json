@@ -1,0 +1,390 @@
+{
+  "id": "fabPautaDiaria01",
+  "name": "01 · Pauta diária (tendências → roteiro)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "e1386947-7fd8-461f-81ba-9363929b54d0",
+      "name": "Todo dia 8h12",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "12 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4f5a5b3f-a12e-40b6-b88c-40986d1dad6b",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Preencha uma vez: URL do worker, Telegram e IDs das pastas do Drive.",
+      "notesInFlow": true,
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ac5016e3-98c5-4808-a732-be3b6a345bc7",
+              "name": "worker_url",
+              "value": "http://worker:8000",
+              "type": "string"
+            },
+            {
+              "id": "ec2d5ba1-f79b-4201-88e3-5782e051567e",
+              "name": "telegram_bot_token",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "410f29b1-e59f-4dca-952c-3211baef38b8",
+              "name": "telegram_chat_id",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "ef09e0de-af6e-4cdb-a954-514758cbcd94",
+              "name": "drive_pasta_roteiros",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "82299cc5-5714-4781-8316-acd8687de1d5",
+              "name": "drive_pasta_artifacts",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "3eb14046-ae40-40ed-8e23-b4eb7e7f04c9",
+              "name": "drive_pasta_prontos",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "26b074d3-7098-41e1-9d53-4320d70d9888",
+              "name": "trilha_arquivo",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "3bcd9671-ac4d-4ef9-baf4-f5629af53f9e",
+              "name": "clima_trilha",
+              "value": "reflexivo",
+              "type": "string"
+            },
+            {
+              "id": "37b29fd1-f71f-4258-a547-63f102b92ad3",
+              "name": "publicar_youtube",
+              "value": "nao",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cd8c8e95-4233-4a03-8ea4-45850a1b8d64",
+      "name": "Coletar tendências",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/pauta/tendencias",
+        "options": {
+          "timeout": 180000
+        }
+      }
+    },
+    {
+      "id": "8da6bbd2-9061-4e63-afdd-2c2e05bd2f24",
+      "name": "Claude: 3 candidatos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/pauta/candidatos",
+        "options": {
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ itens: $json.itens }) }}"
+      }
+    },
+    {
+      "id": "393a9a64-8da6-4746-a878-eebe1e772e5b",
+      "name": "Montar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const c = $json.candidatos;\nconst url = $execution.resumeUrl;\nconst linhas = c.map((x, i) => `<b>${i + 1}. ${x.titulo_provisorio}</b>\\n<i>${x.angulo} · ${x.origem} · retenção ${x.nota_retencao}/10</i>\\n🎣 ${x.gancho}\\n💡 ${x.ideia_universal}`);\nconst teclado = { inline_keyboard: [c.map((x, i) => ({ text: `Fazer o ${i + 1}`, url: `${url}?opcao=${i}` }))] };\nreturn [{ json: { texto: '🎬 <b>Pautas de hoje</b>\\n\\n' + linhas.join('\\n\\n'), teclado, candidatos: c } }];"
+      }
+    },
+    {
+      "id": "975e4463-748e-46ed-a312-8bc3836243d3",
+      "name": "Telegram: escolher pauta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: $json.texto, reply_markup: $json.teclado }) }}"
+      }
+    },
+    {
+      "id": "a9ad3d99-577f-4575-86d1-a0b47a746079",
+      "name": "Esperar escolha",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "GET",
+        "limitWaitTime": true,
+        "limitType": "afterTimeInterval",
+        "resumeAmount": 24,
+        "resumeUnit": "hours",
+        "options": {}
+      },
+      "webhookId": "cc7f9727-dee8-43cf-a343-c4012d2214f0"
+    },
+    {
+      "id": "43f23f32-96e7-4d2a-b9e1-96b536430eb5",
+      "name": "Pegar candidato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const i = Number($json.query?.opcao ?? 0);\nconst c = $('Montar mensagem').first().json.candidatos[i];\nreturn [{ json: { tema: c } }];"
+      }
+    },
+    {
+      "id": "ba42c78e-0dbc-4785-8cf5-f12db531a9c1",
+      "name": "Claude: roteiro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/pauta/roteiro",
+        "options": {
+          "timeout": 900000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tema: $json.tema }) }}"
+      }
+    },
+    {
+      "id": "6da0c820-7b92-4902-8473-ba327d9ec669",
+      "name": "Salvar roteiro no Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $json.roteiro_markdown }}",
+        "name": "={{ $now.toFormat('yyyy-MM-dd') }} · {{ $json.titulo }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.drive_pasta_roteiros }}"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      }
+    },
+    {
+      "id": "97961f58-6156-461d-b060-6fc1c9e50bae",
+      "name": "Telegram: roteiro pronto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $('Config').first().json.telegram_bot_token }}/sendMessage",
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Config').first().json.telegram_chat_id, parse_mode: 'HTML', disable_web_page_preview: true, text: '📝 <b>Roteiro pronto:</b> ' + $('Claude: roteiro').first().json.titulo + '\\n' + $('Claude: roteiro').first().json.palavras + ' palavras\\n\\nCole na conversa de artifacts e salve o .html em <b>02 · Artifacts</b>.\\n' + ($json.webViewLink || '') }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Todo dia 8h12": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coletar tendências": {
+      "main": [
+        [
+          {
+            "node": "Claude: 3 candidatos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: 3 candidatos": {
+      "main": [
+        [
+          {
+            "node": "Montar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Telegram: escolher pauta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: escolher pauta": {
+      "main": [
+        [
+          {
+            "node": "Esperar escolha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar escolha": {
+      "main": [
+        [
+          {
+            "node": "Pegar candidato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar candidato": {
+      "main": [
+        [
+          {
+            "node": "Claude: roteiro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: roteiro": {
+      "main": [
+        [
+          {
+            "node": "Salvar roteiro no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar roteiro no Drive": {
+      "main": [
+        [
+          {
+            "node": "Telegram: roteiro pronto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Coletar tendências",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {}
+}

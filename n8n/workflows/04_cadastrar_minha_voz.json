@@ -1,0 +1,419 @@
+{
+  "id": "fabCadastrarVoz1",
+  "name": "04 · Cadastrar minha voz (gravação no Drive → voz clonada + prévias)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "02b8608d-508b-5465-a733-0cc7a76b275d",
+      "name": "▶ Cadastrar agora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "6c357244-e825-57b2-ac48-161f999b39fe",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "289d6d38-9e57-5c81-965a-52108ee14de2",
+              "name": "worker_url",
+              "value": "https://SEU-WORKER.up.railway.app",
+              "type": "string"
+            },
+            {
+              "id": "549b4494-0c2c-5e81-ad6b-7d422fe70350",
+              "name": "drive_pasta_voz",
+              "value": "COLE_AQUI_O_ID_DA_PASTA_04_MINHA_VOZ",
+              "type": "string"
+            },
+            {
+              "id": "18fe1aa8-a3f3-53a3-b16e-c7bfffefee09",
+              "name": "nome_do_arquivo",
+              "value": "minha_voz.m4a",
+              "type": "string"
+            },
+            {
+              "id": "4bf05f64-78f0-58a8-9ef5-56fa79c320a8",
+              "name": "frase_de_teste",
+              "value": "Seu cérebro não está procurando a verdade. Está procurando conforto. E em 2023, 90 MI de pessoas provaram isso.",
+              "type": "string"
+            },
+            {
+              "id": "da46230d-5685-5fcd-82bf-b0929237594e",
+              "name": "motores_para_comparar",
+              "value": "clone_qwen3,clone_chatterbox,kokoro_onnx",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "Grave 20 a 30 s falando como narrador, num lugar silencioso (celular serve). Ponha o arquivo na pasta 04 · Minha voz.",
+      "notesInFlow": true
+    },
+    {
+      "id": "1a4a4031-a460-586a-b22a-f66c329d462f",
+      "name": "Worker está no ar?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/saude",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "5eef36b7-d949-5365-9241-dac39cbd9f75",
+      "name": "Procurar gravação",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "name",
+        "queryString": "={{ $('Config').first().json.nome_do_arquivo.replace(/\\.[^.]+$/, '') }}",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config').first().json.drive_pasta_voz }}"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {
+          "fields": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "7bef9f5b-143c-5265-84d6-f43622bab91d",
+      "name": "Achou?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const alvo = $('Config').first().json.nome_do_arquivo.trim().toLowerCase();\nconst achados = $input.all().map(i => i.json).filter(f => f.name);\nconst f = achados.find(x => x.name.toLowerCase() === alvo) || achados.find(x => /\\.(wav|mp3|m4a|ogg|opus|webm|aac|flac)$/i.test(x.name));\nif (!f) throw new Error(`Não achei a gravação \"${alvo}\" na pasta da voz. Achei: ${achados.map(x => x.name).join(', ') || 'nada'}`);\nreturn [{ json: f }];"
+      }
+    },
+    {
+      "id": "9d4fbb33-78bc-5d1f-b87f-e8ac60bb2516",
+      "name": "Baixar gravação",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10f43236-a142-5a76-bcdf-a5c4c2a0d628",
+      "name": "Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const buf = await this.helpers.getBinaryDataBuffer(0, 'data');\nreturn [{ json: { audio_base64: buf.toString('base64'), nome_arquivo: $('Achou?').first().json.name } }];"
+      }
+    },
+    {
+      "id": "455e14e3-9acb-535c-8f9f-4184eefb4a74",
+      "name": "Cadastrar voz no worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/voz/referencia",
+        "options": {
+          "timeout": 900000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      }
+    },
+    {
+      "id": "918561aa-5bbd-5fb1-8433-a2a619721333",
+      "name": "Gerar prévias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/voz/teste",
+        "options": {
+          "timeout": 3600000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ texto: $('Config').first().json.frase_de_teste, motores: $('Config').first().json.motores_para_comparar.split(',').map(s => s.trim()).filter(Boolean) }) }}"
+      }
+    },
+    {
+      "id": "8270ebf2-43f8-5622-babf-9fb1017456f1",
+      "name": "Uma prévia por item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const r = $json.resultados.filter(x => x.arquivo);\nif (!r.length) throw new Error('Nenhuma prévia foi gerada: ' + JSON.stringify($json.resultados));\nreturn r.map(x => ({ json: x }));"
+      }
+    },
+    {
+      "id": "769ca5fb-38fc-5813-954b-ced5272ab814",
+      "name": "Baixar prévia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/voz/arquivo/{{ $json.arquivo }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e74bb3f3-bf98-5189-9f81-248f20ebeb5c",
+      "name": "Salvar prévia no Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2420,
+        0
+      ],
+      "parameters": {
+        "name": "=prévia · {{ $('Uma prévia por item').item.json.motor }}.wav",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.drive_pasta_voz }}"
+        },
+        "inputDataFieldName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "200ce1ed-93cb-53bd-81fe-7615a3db7c2c",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const cad = $('Cadastrar voz no worker').first().json;\nconst prev = $('Uma prévia por item').all().map(i => i.json);\nconst links = $input.all().map(i => i.json.webViewLink);\nreturn [{ json: {\n  voz_cadastrada: cad.ok, trecho_usado_segundos: cad.duracao_referencia, fala_acima_do_ruido_db: cad.fala_acima_do_ruido_db,\n  transcricao_do_trecho: cad.transcricao, avisos: cad.avisos,\n  previas: prev.map((p, k) => ({ motor: p.motor, segundos_para_gerar: p.segundos_para_gerar, link: links[k] })),\n  proximo_passo: 'Ouça as prévias. Para usar a sua voz nos vídeos, deixe VOZ_CLONE_MOTOR no worker com o motor que preferir (qwen3 ou chatterbox).'\n} }];"
+      }
+    }
+  ],
+  "connections": {
+    "▶ Cadastrar agora": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Worker está no ar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Worker está no ar?": {
+      "main": [
+        [
+          {
+            "node": "Procurar gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procurar gravação": {
+      "main": [
+        [
+          {
+            "node": "Achou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Achou?": {
+      "main": [
+        [
+          {
+            "node": "Baixar gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar gravação": {
+      "main": [
+        [
+          {
+            "node": "Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "Cadastrar voz no worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadastrar voz no worker": {
+      "main": [
+        [
+          {
+            "node": "Gerar prévias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar prévias": {
+      "main": [
+        [
+          {
+            "node": "Uma prévia por item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma prévia por item": {
+      "main": [
+        [
+          {
+            "node": "Baixar prévia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar prévia": {
+      "main": [
+        [
+          {
+            "node": "Salvar prévia no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar prévia no Drive": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {}
+}

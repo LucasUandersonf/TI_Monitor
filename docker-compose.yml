@@ -1,0 +1,79 @@
+# Fábrica Cult · n8n + Postgres + worker de edição
+#   docker compose --profile cpu up -d         (CPU: Kokoro, sem Stable Audio)
+#   docker compose --profile gpu up -d         (GPU: Chatterbox, WhisperX rápido, Stable Audio, ACE-Step)
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fabrica
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fabrica}
+      POSTGRES_DB: fabrica
+    volumes:
+      - pg:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports: ["5678:5678"]
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_DATABASE: fabrica
+      DB_POSTGRESDB_SCHEMA: n8n
+      DB_POSTGRESDB_USER: fabrica
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-fabrica}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: America/Sao_Paulo
+      N8N_RESTRICT_FILE_ACCESS_TO: /dados
+      N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      DRIVE_PASTA_ARTIFACTS: ${DRIVE_PASTA_ARTIFACTS:-}
+      WORKER_URL: http://worker:8000
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DRIVE_PASTA_PRONTOS: ${DRIVE_PASTA_PRONTOS:-}
+      DRIVE_PASTA_ROTEIROS: ${DRIVE_PASTA_ROTEIROS:-}
+    volumes:
+      - n8n:/home/node/.n8n
+      - ./n8n/plugin/dist:/home/node/.n8n/custom/n8n-nodes-fabrica-cult/dist:ro
+      - ./n8n/plugin/package.json:/home/node/.n8n/custom/n8n-nodes-fabrica-cult/package.json:ro
+      - ./dados:/dados
+    depends_on: [postgres]
+
+  worker:
+    build: { context: ., dockerfile: worker/Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://fabrica:${POSTGRES_PASSWORD:-fabrica}@postgres:5432/fabrica
+    volumes:
+      - ./dados:/dados
+    shm_size: 2gb          # o Chromium precisa de /dev/shm maior para renderizar rápido
+    depends_on: [postgres]
+    profiles: ["cpu"]
+
+  worker-gpu:
+    build: { context: ., dockerfile: worker/Dockerfile, args: { BASE: "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime", IA: "1" } }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://fabrica:${POSTGRES_PASSWORD:-fabrica}@postgres:5432/fabrica
+      TTS_MOTOR: auto
+    volumes:
+      - ./dados:/dados
+      - hf:/root/.cache/huggingface
+    shm_size: 4gb
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+    networks:
+      default:
+        aliases: [worker]
+    depends_on: [postgres]
+    profiles: ["gpu"]
+
+volumes: { pg: {}, n8n: {}, hf: {} }

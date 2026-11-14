@@ -1,0 +1,14 @@
+# núcleo do worker (roda em CPU)
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+numpy
+soundfile
+anthropic
+psycopg[binary]
+kokoro-onnx        # voz Kokoro em ONNX (CPU), vozes pt-BR
+piper-tts          # voz Piper (alternativa local)
+vtracer            # imagem -> SVG (arte vetorizada)
+rlottie-python     # valida e mede animações Lottie
+faster-whisper     # tempo de cada palavra e conferência da voz clonada (CPU)

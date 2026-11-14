@@ -1,0 +1,597 @@
+{
+  "id": "fabTesteRapido01",
+  "name": "00 · Teste rápido (artifact do Drive → vídeos no Drive)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "957d7bb1-55a6-4163-90b3-4f366efc1dbe",
+      "name": "▶ Testar agora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "9b2770f5-733f-4f52-b262-327795466afc",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2ccadcb3-0001-4a42-9d10-f9236af9e01b",
+              "name": "worker_url",
+              "value": "https://SEU-WORKER.up.railway.app",
+              "type": "string"
+            },
+            {
+              "id": "a26e3c20-16b5-49ee-b0d8-26307594f579",
+              "name": "nome_do_artifact",
+              "value": "artifact_motor_de_cenas.html",
+              "type": "string"
+            },
+            {
+              "id": "b6e5959a-b5a1-428d-a7c7-92b74103a9e5",
+              "name": "drive_pasta_artifacts",
+              "value": "COLE_AQUI_O_ID_DA_PASTA_02_ARTIFACTS",
+              "type": "string"
+            },
+            {
+              "id": "7c1349bf-d789-4d76-b090-8217024a5885",
+              "name": "drive_pasta_prontos",
+              "value": "COLE_AQUI_O_ID_DA_PASTA_03_VIDEOS_PRONTOS",
+              "type": "string"
+            },
+            {
+              "id": "6e949d2c-fdab-4e5e-8885-af07646295ae",
+              "name": "gerar_shorts",
+              "value": "sim",
+              "type": "string"
+            },
+            {
+              "id": "63f0e727-d121-4f6f-a0b6-72fc10f2beba",
+              "name": "clima_trilha",
+              "value": "reflexivo",
+              "type": "string"
+            },
+            {
+              "id": "8698c24a-cb58-47d2-9b05-998395e2568b",
+              "name": "trilha_arquivo",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "PREENCHA: URL do worker, nome do .html e os IDs das pastas do Drive (o ID é o final do link da pasta).",
+      "notesInFlow": true
+    },
+    {
+      "id": "be2b5801-ec30-4b99-a85f-10a4167183c1",
+      "name": "Worker está no ar?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/saude",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "857803f2-2ed3-4b58-acdb-adbb4d4baae3",
+      "name": "Procurar artifact no Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "name",
+        "queryString": "={{ $('Config').first().json.nome_do_artifact.replace(/\\.html$/i, '') }}",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config').first().json.drive_pasta_artifacts }}"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {
+          "fields": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "8f6829f8-2683-411a-b088-6f928c439275",
+      "name": "Achou?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const alvo = $('Config').first().json.nome_do_artifact.trim().toLowerCase();\nconst achados = $input.all().map(i => i.json).filter(f => f.name);\nconst f = achados.find(x => x.name.toLowerCase() === alvo) || achados.find(x => x.name.toLowerCase().endsWith('.html'));\nif (!f) throw new Error(`Não achei \"${alvo}\" na pasta 02 · Artifacts. Achei: ${achados.map(x => x.name).join(', ') || 'nada'}`);\nreturn [{ json: f }];",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "b58f5a8e-34f1-453f-afeb-b94562738439",
+      "name": "Baixar artifact",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0b245f02-a736-432d-919e-fd2fc0b06ff3",
+      "name": "Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const buf = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst cfg = $('Config').first().json;\nreturn [{ json: {\n  nome: $('Achou?').first().json.name.replace(/\\.html$/i, ''),\n  artifact_base64: buf.toString('base64'),\n  opcoes: { shorts: cfg.gerar_shorts === 'sim', max_shorts: 3, trilha: true,\n            clima_trilha: cfg.clima_trilha || 'reflexivo', trilha_arquivo: cfg.trilha_arquivo || null }\n} }];",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "1b13ce02-43fb-4bf8-9019-d665a83fb4ee",
+      "name": "Enviar para edição",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.worker_url }}/edicao",
+        "options": {
+          "timeout": 120000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      }
+    },
+    {
+      "id": "00f61f8c-ea08-43f2-9980-ad82261363ae",
+      "name": "Esperar 30 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "webhookId": "12a16599-ca82-40e4-a602-5fae1c912562"
+    },
+    {
+      "id": "c6764ca0-462c-4cdc-ac39-47fad380f337",
+      "name": "Ver andamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/jobs/{{ $('Enviar para edição').first().json.job_id }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "12d2a246-b129-4d55-ae5d-e470a10e8603",
+      "name": "Terminou?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "27015f25-5367-4fa0-8aa5-4513b6a96d2f",
+              "leftValue": "={{ $json.concluido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1739f8ac-3fe9-4767-a202-351f620d198b",
+      "name": "Deu erro?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7b28df58-5010-4109-9ee0-4fdf5fdb8ecd",
+              "leftValue": "={{ $json.atual }}",
+              "rightValue": "erro",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a0540854-462d-4ae8-8943-c9d73a7095c2",
+      "name": "Parar com o erro",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        -220
+      ],
+      "parameters": {
+        "errorMessage": "={{ 'A edição falhou: ' + ($json.etapas.erro?.erro || 'veja os logs do worker') }}"
+      }
+    },
+    {
+      "id": "2a03766c-10dd-4c31-aa8c-f3b6e8142270",
+      "name": "Pegar resultado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/jobs/{{ $('Enviar para edição').first().json.job_id }}/resultado",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "22a56a1d-14bc-4674-a2d9-5f3fc4cc246d",
+      "name": "Um item por arquivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const r = $json;\nreturn r.arquivos.filter(a => a.tipo !== 'metadados').map(a => ({ json: { ...a, job_id: r.job_id, titulo_video: r.titulo } }));",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "94bc272a-02df-4840-8177-640f9efc740d",
+      "name": "Baixar do worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.worker_url }}/arquivos/{{ $json.job_id }}/{{ $json.nome }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "f6c5480c-0668-40b4-84a4-fff05b61ff0d",
+      "name": "Salvar no Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3300,
+        0
+      ],
+      "parameters": {
+        "name": "={{ $('Um item por arquivo').item.json.titulo_video }} · {{ $('Um item por arquivo').item.json.nome }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.drive_pasta_prontos }}"
+        },
+        "inputDataFieldName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "540e0499-9608-4211-8d0f-3ec97dd38e47",
+      "name": "Pronto!",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const itens = $('Um item por arquivo').all().map(i => i.json);\nconst links = $input.all().map(i => i.json.webViewLink);\nconst r = $('Pegar resultado').first().json;\nreturn [{ json: {\n  titulo: r.titulo, duracao_segundos: r.duracao, voz: r.motores?.voz, avisos: r.avisos,\n  arquivos: itens.map((a, k) => ({ tipo: a.tipo, nome: a.nome, link: links[k] }))\n} }];",
+        "mode": "runOnceForAllItems"
+      }
+    }
+  ],
+  "connections": {
+    "▶ Testar agora": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Worker está no ar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Worker está no ar?": {
+      "main": [
+        [
+          {
+            "node": "Procurar artifact no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procurar artifact no Drive": {
+      "main": [
+        [
+          {
+            "node": "Achou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Achou?": {
+      "main": [
+        [
+          {
+            "node": "Baixar artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar artifact": {
+      "main": [
+        [
+          {
+            "node": "Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "Enviar para edição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar para edição": {
+      "main": [
+        [
+          {
+            "node": "Esperar 30 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 30 s": {
+      "main": [
+        [
+          {
+            "node": "Ver andamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ver andamento": {
+      "main": [
+        [
+          {
+            "node": "Terminou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar resultado": {
+      "main": [
+        [
+          {
+            "node": "Um item por arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Um item por arquivo": {
+      "main": [
+        [
+          {
+            "node": "Baixar do worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar do worker": {
+      "main": [
+        [
+          {
+            "node": "Salvar no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar no Drive": {
+      "main": [
+        [
+          {
+            "node": "Pronto!",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Terminou?": {
+      "main": [
+        [
+          {
+            "node": "Deu erro?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Esperar 30 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deu erro?": {
+      "main": [
+        [
+          {
+            "node": "Parar com o erro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pegar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {}
+}

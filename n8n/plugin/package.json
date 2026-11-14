@@ -1,0 +1,16 @@
+{
+  "name": "n8n-nodes-fabrica-cult",
+  "version": "0.1.0",
+  "description": "Nó do n8n para o worker de edição da Fábrica Cult (artifact → vídeo longo 16:9 + shorts 9:16)",
+  "keywords": ["n8n-community-node-package"],
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": { "build": "tsc && cp nodes/FabricaCult/*.svg dist/nodes/FabricaCult/" },
+  "files": ["dist"],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": ["dist/credentials/FabricaCultApi.credentials.js"],
+    "nodes": ["dist/nodes/FabricaCult/FabricaCult.node.js"]
+  },
+  "devDependencies": { "n8n-workflow": "*", "typescript": "~5.6.0" }
+}
